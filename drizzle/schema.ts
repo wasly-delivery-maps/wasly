@@ -1,4 +1,15 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  decimal,
+  boolean,
+  json,
+} from "drizzle-orm/mysql-core";
+import { unique } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -6,23 +17,142 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-or
  * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
+  phone: varchar("phone", { length: 20 }).unique(),
+  password: varchar("password", { length: 255 }),
+  name: varchar("name", { length: 100 }),
   email: varchar("email", { length: 320 }),
+  role: mysqlEnum("role", ["customer", "driver", "admin"]).default("customer").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }),
+  totalCommission: decimal("totalCommission", { precision: 10, scale: 2 }).default("0").notNull(),
+  totalDebt: decimal("totalDebt", { precision: 10, scale: 2 }).default("0").notNull(),
+  isBlocked: boolean("isBlocked").default(false).notNull(),
+  pendingCommission: decimal("pendingCommission", { precision: 10, scale: 2 }).default("0").notNull(),
+  paidCommission: decimal("paidCommission", { precision: 10, scale: 2 }).default("0").notNull(),
+  accountStatus: mysqlEnum("accountStatus", ["active", "suspended", "disabled"]).default("active").notNull(),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn"),
 });
+
+export const orders = mysqlTable("orders", {
+  id: int("id").autoincrement().primaryKey(),
+  customerId: int("customerId").notNull(),
+  driverId: int("driverId"),
+  pickupLocation: json("pickupLocation").notNull(),
+  deliveryLocation: json("deliveryLocation").notNull(),
+  status: mysqlEnum("status", [
+    "pending",
+    "assigned",
+    "accepted",
+    "in_transit",
+    "arrived",
+    "delivered",
+    "cancelled",
+  ])
+    .default("pending")
+    .notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }),
+  distance: decimal("distance", { precision: 10, scale: 2 }),
+  estimatedTime: int("estimatedTime"),
+  notes: text("notes"),
+  rating: int("rating"),
+  ratingComment: text("ratingComment"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  deliveredAt: timestamp("deliveredAt"),
+});
+
+export const driversAvailability = mysqlTable("drivers_availability", {
+  id: int("id").autoincrement().primaryKey(),
+  driverId: int("driverId").notNull().unique(),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
+  isAvailable: boolean("isAvailable").default(true).notNull(),
+  currentOrderId: int("currentOrderId"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  type: mysqlEnum("type", [
+    "order_assigned",
+    "order_accepted",
+    "order_in_transit",
+    "order_arrived",
+    "order_delivered",
+    "order_cancelled",
+    "new_order_available",
+    "system",
+  ])
+    .default("system")
+    .notNull(),
+  isRead: boolean("isRead").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  readAt: timestamp("readAt"),
+});
+
+export const orderHistory = mysqlTable("order_history", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
+  changedBy: int("changedBy"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const driverLocations = mysqlTable("driver_locations", {
+  id: int("id").autoincrement().primaryKey(),
+  driverId: int("driverId").notNull(),
+  orderId: int("orderId"),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
+  accuracy: decimal("accuracy", { precision: 10, scale: 2 }),
+  speed: decimal("speed", { precision: 10, scale: 2 }),
+  heading: decimal("heading", { precision: 10, scale: 2 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const pushSubscriptions = mysqlTable(
+  "push_subscriptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("user_id").notNull(),
+    endpoint: varchar("endpoint", { length: 500 }).notNull(),
+    keys: json("keys").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    endpointUnique: unique("endpoint_unique").on(table.endpoint),
+  })
+);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+export type Order = typeof orders.$inferSelect;
+export type InsertOrder = typeof orders.$inferInsert;
+
+export type DriverAvailability = typeof driversAvailability.$inferSelect;
+export type InsertDriverAvailability = typeof driversAvailability.$inferInsert;
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
+
+export type OrderHistory = typeof orderHistory.$inferSelect;
+export type InsertOrderHistory = typeof orderHistory.$inferInsert;
+
+export type DriverLocation = typeof driverLocations.$inferSelect;
+export type InsertDriverLocation = typeof driverLocations.$inferInsert;
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
