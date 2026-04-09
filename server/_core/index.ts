@@ -59,6 +59,11 @@ async function startServer() {
   // Authentication routes
   registerAuthRoutes(app);
   
+  // Health check endpoint for Railway/Docker
+  app.get("/health", (req, res) => {
+    res.status(200).json({ ok: true, timestamp: new Date().toISOString() });
+  });
+  
   // SSE Notifications endpoint
   app.get("/api/notifications/subscribe/:userId", (req, res) => {
     const userId = parseInt(req.params.userId);
