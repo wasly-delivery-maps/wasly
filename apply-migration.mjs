@@ -12,7 +12,9 @@ async function applyMigration() {
     password: process.env.DB_PASSWORD || 'EcdJSdZ5TmFMDvyq',
     database: process.env.DB_NAME || 'test',
     port: process.env.DB_PORT || 4000,
-    ssl: 'Amazon RDS',
+    ssl: {
+      rejectUnauthorized: false,
+    },
   });
 
   try {
