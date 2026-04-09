@@ -39,17 +39,24 @@ let _useInMemory = true; // Default to in-memory
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      // Add SSL configuration for TiDB Cloud
-      _db = drizzle({
-        connection: {
-          uri: process.env.DATABASE_URL,
-          ssl: {
-            minVersion: 'TLSv1.2',
-            rejectUnauthorized: true
-          }
-        }
+      // Use mysql2 connection pool for TiDB
+      const mysql = require('mysql2/promise');
+      const pool = mysql.createPool({
+        host: 'gateway01.eu-central-1.prod.aws.tidbcloud.com',
+        port: 4000,
+        user: '2TsznmHar2ue24f.root',
+        password: 'EcdJSdZ5TmFMDvyq',
+        database: 'test',
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        ssl: 'amazon',
+        enableKeepAlive: true,
+        keepAliveInitialDelaySeconds: 0,
       });
+      _db = drizzle(pool);
       _useInMemory = false;
+      console.log("[Database] Connected to TiDB successfully");
     } catch (error: any) {
       console.warn("[Database] Failed to connect:", error.message || error);
       console.log("[Database] Falling back to in-memory database");
