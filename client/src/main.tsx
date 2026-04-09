@@ -52,6 +52,39 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+// تسجيل Service Worker للـ PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/service-worker.js')
+      .then((registration) => {
+        console.log('[PWA] Service Worker registered:', registration);
+        
+        // التحقق من التحديثات
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('[PWA] New version available, please refresh');
+              }
+            });
+          }
+        });
+      })
+      .catch((error) => {
+        console.error('[PWA] Service Worker registration failed:', error);
+      });
+  });
+}
+
+// طلب إذن الإشعارات
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission().then((permission) => {
+    console.log('[PWA] Notification permission:', permission);
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>

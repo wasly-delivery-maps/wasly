@@ -1,12 +1,16 @@
-import "dotenv/config";
+import 'dotenv/config';
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import { Server as SocketIOServer } from "socket.io";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
+import { registerAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { setupLocationTracking } from "./locationTracking";
+import { setupOrderNotifications } from "./orderNotifications";
+import { registerSSEConnection, sendNotificationToUser } from "../notifications";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -28,13 +32,43 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Log environment status
+  console.log("[Environment] DATABASE_URL:", process.env.DATABASE_URL ? "configured" : "not configured");
+  console.log("[Environment] Using in-memory database mode");
+  
   const app = express();
   const server = createServer(app);
+  
+  // Initialize Socket.IO for real-time location tracking
+  const io = new SocketIOServer(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"],
+    },
+  });
+  
+  // Setup location tracking
+  setupLocationTracking(io);
+  
+  // Setup order notifications
+  setupOrderNotifications(io);
+  
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
+  // Authentication routes
+  registerAuthRoutes(app);
+  
+  // SSE Notifications endpoint
+  app.get("/api/notifications/subscribe/:userId", (req, res) => {
+    const userId = parseInt(req.params.userId);
+    if (isNaN(userId)) {
+      res.status(400).json({ error: "Invalid user ID" });
+      return;
+    }
+    registerSSEConnection(userId, res);
+  });
+  
   // tRPC API
   app.use(
     "/api/trpc",
@@ -49,6 +83,10 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+  
+  // Store io instance for use in routers
+  (app as any).io = io;
+  (app as any).sendNotificationToUser = sendNotificationToUser;
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
@@ -59,7 +97,10 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    console.log(`WebSocket server initialized on port ${port}`);
   });
 }
 
 startServer().catch(console.error);
+
+export { SocketIOServer };

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: easy-al-obour
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-this-in-production}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL:-}
+      - VITE_APP_ID=${VITE_APP_ID:-}
+      - OWNER_OPEN_ID=${OWNER_OPEN_ID:-}
+      - DATABASE_URL=${DATABASE_URL:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - ./dist:/app/dist
+    networks:
+      - easy-al-obour-network
+
+networks:
+  easy-al-obour-network:
+    driver: bridge

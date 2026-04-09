@@ -7,14 +7,13 @@ import {
   varchar,
   decimal,
   boolean,
+  datetime,
   json,
 } from "drizzle-orm/mysql-core";
 import { unique } from "drizzle-orm/mysql-core";
 
 /**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
+ * Users table - Core user data for customers, drivers, and admins
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -22,7 +21,7 @@ export const users = mysqlTable("users", {
   phone: varchar("phone", { length: 20 }).unique(),
   password: varchar("password", { length: 255 }),
   name: varchar("name", { length: 100 }),
-  email: varchar("email", { length: 320 }),
+  email: varchar("email", { length: 255 }),
   role: mysqlEnum("role", ["customer", "driver", "admin"]).default("customer").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   latitude: decimal("latitude", { precision: 10, scale: 8 }),
@@ -30,21 +29,25 @@ export const users = mysqlTable("users", {
   totalCommission: decimal("totalCommission", { precision: 10, scale: 2 }).default("0").notNull(),
   totalDebt: decimal("totalDebt", { precision: 10, scale: 2 }).default("0").notNull(),
   isBlocked: boolean("isBlocked").default(false).notNull(),
-  pendingCommission: decimal("pendingCommission", { precision: 10, scale: 2 }).default("0").notNull(),
-  paidCommission: decimal("paidCommission", { precision: 10, scale: 2 }).default("0").notNull(),
-  accountStatus: mysqlEnum("accountStatus", ["active", "suspended", "disabled"]).default("active").notNull(),
-  loginMethod: varchar("loginMethod", { length: 64 }),
+  // عمولات السائق والحالة
+  pendingCommission: decimal("pendingCommission", { precision: 10, scale: 2 }).default("0").notNull(), // عمولات مستحقة لم تدفع
+  paidCommission: decimal("paidCommission", { precision: 10, scale: 2 }).default("0").notNull(), // عمولات مدفوعة
+  accountStatus: mysqlEnum("accountStatus", ["active", "suspended", "disabled"]).default("active").notNull(), // حالة الحساب
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn"),
+  loginMethod: varchar("loginMethod", { length: 64 }),
 });
 
+/**
+ * Orders table - Delivery orders
+ */
 export const orders = mysqlTable("orders", {
   id: int("id").autoincrement().primaryKey(),
   customerId: int("customerId").notNull(),
   driverId: int("driverId"),
-  pickupLocation: json("pickupLocation").notNull(),
-  deliveryLocation: json("deliveryLocation").notNull(),
+  pickupLocation: json("pickupLocation").notNull(), // { address, latitude, longitude }
+  deliveryLocation: json("deliveryLocation").notNull(), // { address, latitude, longitude }
   status: mysqlEnum("status", [
     "pending",
     "assigned",
@@ -57,16 +60,19 @@ export const orders = mysqlTable("orders", {
     .default("pending")
     .notNull(),
   price: decimal("price", { precision: 10, scale: 2 }),
-  distance: decimal("distance", { precision: 10, scale: 2 }),
-  estimatedTime: int("estimatedTime"),
+  distance: decimal("distance", { precision: 10, scale: 2 }), // in kilometers
+  estimatedTime: int("estimatedTime"), // in minutes
   notes: text("notes"),
-  rating: int("rating"),
+  rating: int("rating"), // 1-5 stars
   ratingComment: text("ratingComment"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   deliveredAt: timestamp("deliveredAt"),
 });
 
+/**
+ * Driver Availability - Track driver location and availability
+ */
 export const driversAvailability = mysqlTable("drivers_availability", {
   id: int("id").autoincrement().primaryKey(),
   driverId: int("driverId").notNull().unique(),
@@ -77,6 +83,9 @@ export const driversAvailability = mysqlTable("drivers_availability", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/**
+ * Notifications table - System notifications for users
+ */
 export const notifications = mysqlTable("notifications", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -99,6 +108,9 @@ export const notifications = mysqlTable("notifications", {
   readAt: timestamp("readAt"),
 });
 
+/**
+ * Order History - Track order status changes
+ */
 export const orderHistory = mysqlTable("order_history", {
   id: int("id").autoincrement().primaryKey(),
   orderId: int("orderId").notNull(),
@@ -108,26 +120,32 @@ export const orderHistory = mysqlTable("order_history", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/**
+ * Driver Locations table - Real-time location tracking for drivers
+ */
 export const driverLocations = mysqlTable("driver_locations", {
   id: int("id").autoincrement().primaryKey(),
   driverId: int("driverId").notNull(),
   orderId: int("orderId"),
   latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
   longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
-  accuracy: decimal("accuracy", { precision: 10, scale: 2 }),
-  speed: decimal("speed", { precision: 10, scale: 2 }),
-  heading: decimal("heading", { precision: 10, scale: 2 }),
+  accuracy: decimal("accuracy", { precision: 10, scale: 2 }), // GPS accuracy in meters
+  speed: decimal("speed", { precision: 10, scale: 2 }), // Speed in km/h
+  heading: decimal("heading", { precision: 10, scale: 2 }), // Direction in degrees
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/**
+ * Push Subscriptions table - Web push notification subscriptions
+ */
 export const pushSubscriptions = mysqlTable(
   "push_subscriptions",
   {
     id: int("id").autoincrement().primaryKey(),
     userId: int("user_id").notNull(),
     endpoint: varchar("endpoint", { length: 500 }).notNull(),
-    keys: json("keys").notNull(),
+    keys: json("keys").notNull(), // { p256dh, auth }
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
   },
@@ -136,6 +154,7 @@ export const pushSubscriptions = mysqlTable(
   })
 );
 
+// Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 

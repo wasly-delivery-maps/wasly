@@ -4,28 +4,33 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
-import Login from "./pages/Login";
+import Auth from "./pages/Auth";
+import CustomerDashboard from "./pages/CustomerDashboard";
+import DriverDashboard from "./pages/DriverDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import CreateOrder from "./pages/CreateOrder";
+import DriverProfile from "./pages/DriverProfile";
+import CustomerProfile from "./pages/CustomerProfile";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/login"} component={Login} />
-      <Route path={"/admin"} component={AdminDashboard} />
-      <Route path={"/404"} component={NotFound} />
+      <Route path="/" component={Home} />
+      <Route path="/auth" component={Auth} />
+      <Route path="/customer/dashboard" component={() => <ProtectedRoute component={CustomerDashboard} requiredRole="customer" />} />
+      <Route path="/customer/profile" component={() => <ProtectedRoute component={CustomerProfile} requiredRole="customer" />} />
+      <Route path="/customer/create-order" component={() => <ProtectedRoute component={CreateOrder} requiredRole="customer" />} />
+      <Route path="/driver/dashboard" component={() => <ProtectedRoute component={DriverDashboard} requiredRole="driver" />} />
+      <Route path="/driver/profile" component={() => <ProtectedRoute component={DriverProfile} requiredRole="driver" />} />
+      <Route path="/admin/dashboard" component={() => <ProtectedRoute component={AdminDashboard} requiredRole="admin" />} />
+      <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
   );
 }
-
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
 function App() {
   return (
