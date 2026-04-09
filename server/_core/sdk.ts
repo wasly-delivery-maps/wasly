@@ -257,8 +257,7 @@ class SDKServer {
 
   async authenticateRequest(req: Request): Promise<User> {
     // Regular authentication flow
-    const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME);
+    const sessionCookie = (req as any).cookies?.[COOKIE_NAME] || this.parseCookies(req.headers.cookie).get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {
