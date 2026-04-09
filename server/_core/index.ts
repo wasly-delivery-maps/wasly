@@ -6,6 +6,7 @@ import net from "net";
 import { Server as SocketIOServer } from "socket.io";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerAuthRoutes } from "./oauth";
+import "./firebase";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
