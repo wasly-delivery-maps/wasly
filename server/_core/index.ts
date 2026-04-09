@@ -35,8 +35,12 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   // Log environment status
-  console.log("[Environment] DATABASE_URL:", process.env.DATABASE_URL ? "configured" : "not configured");
-  console.log("[Environment] Using in-memory database mode");
+  console.log("[Environment] Server starting...");
+  if (!process.env.DATABASE_URL) {
+    console.warn("[Environment] WARNING: DATABASE_URL is not set. Falling back to in-memory database.");
+  } else {
+    console.log("[Environment] DATABASE_URL is configured.");
+  }
   
   const app = express();
   const server = createServer(app);
