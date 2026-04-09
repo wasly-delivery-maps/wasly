@@ -39,7 +39,16 @@ let _useInMemory = true; // Default to in-memory
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      // Add SSL configuration for TiDB Cloud
+      _db = drizzle({
+        connection: {
+          uri: process.env.DATABASE_URL,
+          ssl: {
+            minVersion: 'TLSv1.2',
+            rejectUnauthorized: true
+          }
+        }
+      });
       _useInMemory = false;
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);

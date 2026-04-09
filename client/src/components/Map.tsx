@@ -95,7 +95,7 @@ function loadMapScript() {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&v=weekly&libraries=places,geocoding,marker,geometry`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
