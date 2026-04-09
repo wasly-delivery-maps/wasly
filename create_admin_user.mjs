@@ -4,14 +4,14 @@ import bcryptjs from 'bcryptjs';
 async function createAdmin() {
   let connection;
   try {
-    console.log('🔄 جاري الاتصال بـ TiDB...');
+    console.log('🔄 جاري الاتصال بـ TiDB (قاعدة بيانات test)...');
     
     connection = await mysql.createConnection({
       host: 'gateway01.eu-central-1.prod.aws.tidbcloud.com',
       port: 4000,
       user: '2TsznmHar2ue24f.root',
       password: 'EcdJSdZ5TmFMDvyq',
-      database: 'sys',
+      database: 'test',
       ssl: {
         minVersion: 'TLSv1.2',
         rejectUnauthorized: false,
