@@ -36,6 +36,7 @@ export default function Auth() {
           phone: loginPhone,
           password: loginPassword,
         }),
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -56,8 +57,8 @@ export default function Auth() {
         navigate("/customer/dashboard");
       }
     } catch (error) {
-      toast.error("فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.");
-      console.error(error);
+      console.error("Login error:", error);
+      toast.error("فشل تسجيل الدخول. يرجى التحقق من البيانات والمحاولة مرة أخرى.");
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +79,7 @@ export default function Auth() {
           email: registerEmail,
           role: registerRole,
         }),
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -98,8 +100,8 @@ export default function Auth() {
         navigate("/customer/dashboard");
       }
     } catch (error) {
-      toast.error("فشل التسجيل. يرجى المحاولة مرة أخرى.");
-      console.error(error);
+      console.error("Register error:", error);
+      toast.error("فشل التسجيل. يرجى التحقق من البيانات والمحاولة مرة أخرى.");
     } finally {
       setIsLoading(false);
     }

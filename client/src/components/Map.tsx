@@ -95,14 +95,25 @@ function loadMapScript() {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&v=weekly&libraries=places,geocoding,marker,geometry`;
+    const isProxy = !import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const baseUrl = isProxy 
+      ? `${import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev"}/v1/maps/proxy/maps/api/js`
+      : "https://maps.googleapis.com/maps/api/js";
+    script.src = `${baseUrl}?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry,routes`;
     script.async = true;
-    script.defer = true;
+    script.crossOrigin = "anonymous";
     script.onload = () => {
-      resolve(null);
+      if (window.google && window.google.maps) {
+        console.log("[Maps] Google Maps API loaded successfully");
+        resolve(null);
+      } else {
+        console.error("[Maps] Google object not found after script load");
+        resolve(null);
+      }
     };
     script.onerror = () => {
-      console.error("Failed to load Google Maps script");
+      console.error("[Maps] Failed to load Google Maps script");
+      resolve(null);
     };
     document.head.appendChild(script);
   });
@@ -117,7 +128,7 @@ interface MapViewProps {
 
 export function MapView({
   className,
-  initialCenter = { lat: 37.7749, lng: -122.4194 },
+  initialCenter = { lat: 30.2241, lng: 31.4744 }, // Al-Obour, Egypt
   initialZoom = 12,
   onMapReady,
 }: MapViewProps) {
@@ -130,17 +141,20 @@ export function MapView({
       console.error("Map container not found");
       return;
     }
-    map.current = new window.google.maps.Map(mapContainer.current, {
-      zoom: initialZoom,
-      center: initialCenter,
-      mapTypeControl: true,
-      fullscreenControl: true,
-      zoomControl: true,
-      streetViewControl: true,
-      mapId: "DEMO_MAP_ID",
-    });
-    if (onMapReady) {
-      onMapReady(map.current);
+    
+    if (!map.current && window.google && window.google.maps) {
+      map.current = new window.google.maps.Map(mapContainer.current, {
+        zoom: initialZoom,
+        center: initialCenter,
+        mapTypeControl: true,
+        fullscreenControl: true,
+        zoomControl: true,
+        streetViewControl: true,
+        mapId: "DEMO_MAP_ID",
+      });
+      if (onMapReady) {
+        onMapReady(map.current);
+      }
     }
   });
 
@@ -149,6 +163,6 @@ export function MapView({
   }, [init]);
 
   return (
-    <div ref={mapContainer} className={cn("w-full h-[500px]", className)} />
+    <div ref={mapContainer} className={cn("w-full h-[500px] rounded-lg overflow-hidden border border-border", className)} />
   );
 }

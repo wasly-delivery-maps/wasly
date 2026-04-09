@@ -65,8 +65,10 @@ export default function MapPicker({
       const address = location.formatted_address;
 
       // تحديث الخريطة
-      mapRef.current.setCenter({ lat, lng });
-      mapRef.current.setZoom(17);
+      if (mapRef.current) {
+        mapRef.current.setCenter({ lat, lng });
+        mapRef.current.setZoom(17);
+      }
 
       // إزالة marker القديم
       if (markerRef.current) {
@@ -75,13 +77,17 @@ export default function MapPicker({
 
       // إضافة marker جديد
       try {
-        markerRef.current = new google.maps.marker.AdvancedMarkerElement({
-          map: mapRef.current,
-          position: { lat, lng },
-          title: address,
-        });
+        if (mapRef.current && window.google && window.google.maps) {
+          markerRef.current = new google.maps.marker.AdvancedMarkerElement({
+            map: mapRef.current,
+            position: { lat, lng },
+            title: address,
+          });
+        } else {
+          console.warn("[Maps] Google Maps not available for marker creation");
+        }
       } catch (error) {
-        console.error("خطأ في إضافة marker:", error);
+        console.error("[Maps] خطأ في إضافة marker:", error);
       }
 
       // استدعاء callback

@@ -1,163 +1,136 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
-import * as db from "../db";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
-import bcrypt from "bcryptjs";
-
-function getQueryParam(req: Request, key: string): string | undefined {
-  const value = req.query[key];
-  return typeof value === "string" ? value : undefined;
-}
+import { auth, createOrUpdateUser, getUserByPhone } from "./firebase";
 
 export function registerAuthRoutes(app: Express) {
   /**
-   * Login endpoint - Phone + Password
+   * Login with phone and password
    */
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const { phone, password } = req.body;
 
       if (!phone || !password) {
-        res.status(400).json({ error: "Phone and password are required" });
-        return;
+        return res.status(400).json({ error: "رقم الهاتف وكلمة المرور مطلوبان" });
       }
 
-      const user = await db.getUserByPhone(phone);
-
+      // Find user by phone in Firestore
+      const user = await getUserByPhone(phone);
       if (!user) {
-        res.status(401).json({ error: "Invalid phone or password" });
-        return;
+        return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
       }
 
-      // Verify password
-      if (!user.password) {
-        res.status(401).json({ error: "Invalid phone or password" });
-        return;
-      }
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        res.status(401).json({ error: "Invalid phone or password" });
-        return;
+      // Check if user is active
+      if (user.status === "suspended") {
+        return res.status(403).json({ error: "الحساب معطل" });
       }
 
-      // Check if account is active (handle both boolean and string values from DB)
-      const isActive = user.isActive === true || (user.isActive as any) === "1" || (user.isActive as any) === 1;
-      if (!isActive) {
-        res.status(403).json({ error: "Account is inactive" });
-        return;
+      try {
+        // Create session token using Manus SDK
+        const sessionToken = await sdk.createSessionToken(user.uid, {
+          name: user.name || "",
+          expiresInMs: ONE_YEAR_MS,
+        });
+
+        // Set session cookie
+        const cookieOptions = getSessionCookieOptions(req);
+        res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+
+        return res.json({
+          success: true,
+          user: {
+            id: user.uid,
+            phone: user.phone,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        });
+      } catch (authError) {
+        console.error("Firebase auth error:", authError);
+        return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
       }
-
-      // Update last signed in
-      await db.upsertUser({
-        openId: user.openId,
-        phone: user.phone || undefined,
-        password: user.password || undefined,
-        lastSignedIn: new Date(),
-      });
-
-      // Create session token
-      const sessionToken = await sdk.createSessionToken(user.openId, {
-        name: user.name || "",
-        expiresInMs: ONE_YEAR_MS,
-      });
-
-      const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-
-      res.json({
-        success: true,
-        user: {
-          id: user.id,
-          phone: user.phone,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      });
     } catch (error) {
-      console.error("[Auth] Login failed", error);
-      res.status(500).json({ error: "Login failed" });
+      console.error("Login error:", error);
+      return res.status(500).json({ error: "فشل في تسجيل الدخول" });
     }
   });
 
   /**
-   * Register endpoint - Create new account
+   * Register new user
    */
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const { phone, password, name, email, role } = req.body;
 
-      if (!phone || !password) {
-        res.status(400).json({ error: "Phone and password are required" });
-        return;
+      if (!phone || !password || !name) {
+        return res.status(400).json({ error: "جميع الحقول المطلوبة يجب إكمالها" });
       }
 
       // Check if user already exists
-      const existingUser = await db.getUserByPhone(phone);
+      const existingUser = await getUserByPhone(phone);
       if (existingUser) {
-        res.status(400).json({ error: "Phone number already registered" });
-        return;
+        return res.status(409).json({ error: "رقم الهاتف مسجل بالفعل" });
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      // Create new user
-      const openId = `phone-${phone}`;
-      await db.upsertUser({
-        openId,
-        phone,
-        password: hashedPassword,
-        name: name || null,
-        email: email || null,
-        role: role || "customer",
-        isActive: true,
-        lastSignedIn: new Date(),
+      // Create Firebase user
+      const userRecord = await auth.createUser({
+        phoneNumber: phone,
+        password: password,
+        displayName: name,
+        email: email || undefined,
       });
 
-      const user = await db.getUserByPhone(phone);
-      if (!user) {
-        res.status(500).json({ error: "Failed to create user" });
-        return;
-      }
+      // Create Firestore user document
+      const user = await createOrUpdateUser(userRecord.uid, {
+        phone: phone,
+        name: name,
+        email: email,
+        role: role || "customer",
+      });
 
-      // Create session token
-      const sessionToken = await sdk.createSessionToken(user.openId, {
+      // Create session token using Manus SDK
+      const sessionToken = await sdk.createSessionToken(user.uid, {
         name: user.name || "",
         expiresInMs: ONE_YEAR_MS,
       });
 
+      // Set session cookie
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
-      res.json({
+      return res.json({
         success: true,
         user: {
-          id: user.id,
+          id: user.uid,
           phone: user.phone,
           name: user.name,
           email: user.email,
           role: user.role,
         },
       });
-    } catch (error) {
-      console.error("[Auth] Register failed", error);
-      res.status(500).json({ error: "Registration failed" });
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      return res.status(500).json({ 
+        error: error.message || "فشل في إنشاء الحساب" 
+      });
     }
   });
 
   /**
-   * Logout endpoint
+   * Logout
    */
-  app.post("/api/auth/logout", async (req: Request, res: Response) => {
-    try {
-      const cookieOptions = getSessionCookieOptions(req);
-      res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[Auth] Logout failed", error);
-      res.status(500).json({ error: "Logout failed" });
-    }
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    const cookieOptions = getSessionCookieOptions(req);
+    res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+    return res.json({ success: true });
   });
 }
