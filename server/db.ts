@@ -50,8 +50,8 @@ export async function getDb() {
         }
       });
       _useInMemory = false;
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+    } catch (error: any) {
+      console.warn("[Database] Failed to connect:", error.message || error);
       console.log("[Database] Falling back to in-memory database");
       _db = null;
       _useInMemory = true;
