@@ -2,11 +2,12 @@ import type { Express, Request, Response } from "express";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
-import { auth, createOrUpdateUser, getUserByPhone } from "./firebase";
+import * as db from "../db";
+import bcryptjs from "bcryptjs";
 
 export function registerAuthRoutes(app: Express) {
   /**
-   * Login with phone and password
+   * Login with phone and password (TiDB-backed, Firebase-independent)
    */
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
@@ -16,20 +17,38 @@ export function registerAuthRoutes(app: Express) {
         return res.status(400).json({ error: "رقم الهاتف وكلمة المرور مطلوبان" });
       }
 
-      // Find user by phone in Firestore
-      const user = await getUserByPhone(phone);
+      // Find user by phone in TiDB
+      const user = await db.getUserByPhone(phone);
       if (!user) {
         return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
       }
 
       // Check if user is active
-      if (user.status === "suspended") {
+      if (!user.isActive) {
         return res.status(403).json({ error: "الحساب معطل" });
       }
 
+      // Verify password
+      if (!user.password) {
+        return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
+      }
+
+      const isPasswordValid = await bcryptjs.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
+      }
+
+      // Update last signed in
+      await db.upsertUser({
+        openId: user.openId,
+        phone: user.phone || undefined,
+        password: user.password || undefined,
+        lastSignedIn: new Date(),
+      });
+
       try {
-        // Create session token using Manus SDK
-        const sessionToken = await sdk.createSessionToken(user.uid, {
+        // Create session token using Manus SDK with openId
+        const sessionToken = await sdk.createSessionToken(user.openId, {
           name: user.name || "",
           expiresInMs: ONE_YEAR_MS,
         });
@@ -44,7 +63,7 @@ export function registerAuthRoutes(app: Express) {
         return res.json({
           success: true,
           user: {
-            id: user.uid,
+            id: user.id,
             phone: user.phone,
             name: user.name,
             email: user.email,
@@ -52,8 +71,8 @@ export function registerAuthRoutes(app: Express) {
           },
         });
       } catch (authError) {
-        console.error("Firebase auth error:", authError);
-        return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
+        console.error("Session creation error:", authError);
+        return res.status(401).json({ error: "فشل في إنشاء جلسة العمل" });
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -62,7 +81,7 @@ export function registerAuthRoutes(app: Express) {
   });
 
   /**
-   * Register new user
+   * Register new user (TiDB-backed, Firebase-independent)
    */
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
@@ -73,50 +92,60 @@ export function registerAuthRoutes(app: Express) {
       }
 
       // Check if user already exists
-      const existingUser = await getUserByPhone(phone);
+      const existingUser = await db.getUserByPhone(phone);
       if (existingUser) {
         return res.status(409).json({ error: "رقم الهاتف مسجل بالفعل" });
       }
 
-      // Create Firebase user
-      const userRecord = await auth.createUser({
-        phoneNumber: phone,
-        password: password,
-        displayName: name,
-        email: email || undefined,
-      });
+      // Hash password
+      const hashedPassword = await bcryptjs.hash(password, 10);
 
-      // Create Firestore user document
-      const user = await createOrUpdateUser(userRecord.uid, {
+      // Create user in TiDB
+      const openId = `phone-${phone}`;
+      await db.upsertUser({
+        openId,
         phone: phone,
+        password: hashedPassword,
         name: name,
         email: email,
         role: role || "customer",
+        isActive: true,
       });
 
-      // Create session token using Manus SDK
-      const sessionToken = await sdk.createSessionToken(user.uid, {
-        name: user.name || "",
-        expiresInMs: ONE_YEAR_MS,
-      });
+      // Get the created user
+      const user = await db.getUserByPhone(phone);
+      if (!user) {
+        return res.status(500).json({ error: "فشل في إنشاء المستخدم" });
+      }
 
-      // Set session cookie
-      const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, {
-        ...cookieOptions,
-        maxAge: ONE_YEAR_MS,
-      });
+      try {
+        // Create session token using Manus SDK with openId
+        const sessionToken = await sdk.createSessionToken(user.openId, {
+          name: user.name || "",
+          expiresInMs: ONE_YEAR_MS,
+        });
 
-      return res.json({
-        success: true,
-        user: {
-          id: user.uid,
-          phone: user.phone,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      });
+        // Set session cookie
+        const cookieOptions = getSessionCookieOptions(req);
+        res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+
+        return res.json({
+          success: true,
+          user: {
+            id: user.id,
+            phone: user.phone,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        });
+      } catch (authError) {
+        console.error("Session creation error:", authError);
+        return res.status(500).json({ error: "فشل في إنشاء جلسة العمل" });
+      }
     } catch (error: any) {
       console.error("Registration error:", error);
       return res.status(500).json({ 

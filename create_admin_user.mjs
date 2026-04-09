@@ -10,8 +10,8 @@ async function createAdmin() {
       host: 'gateway01.eu-central-1.prod.aws.tidbcloud.com',
       port: 4000,
       user: '2TsznmHar2ue24f.root',
-      password: 'MrsonbThix8zlDfn',
-      database: 'test',
+      password: 'EcdJSdZ5TmFMDvyq',
+      database: 'sys',
       ssl: {
         minVersion: 'TLSv1.2',
         rejectUnauthorized: false,
@@ -37,8 +37,8 @@ async function createAdmin() {
     `;
 
     const values = [
-      'phone-01557564373',
-      '01557564373',
+      'phone-+201557564373',
+      '+201557564373',
       hashedPassword,
       'مسؤول النظام',
       'admin@wasly.app',
@@ -49,7 +49,7 @@ async function createAdmin() {
     await connection.query(query, values);
     console.log('✅ تم إنشاء حساب المسؤول بنجاح!');
     console.log('\n📱 بيانات الدخول:');
-    console.log('الهاتف: 01557564373');
+    console.log('الهاتف: 01557564373 أو +201557564373');
     console.log('كلمة المرور: 12345aA@');
 
     await connection.end();

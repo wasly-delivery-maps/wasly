@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { normalizePhoneNumber } from "@/lib/utils";
 
 export default function Auth() {
   const [, navigate] = useLocation();
@@ -29,11 +30,14 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
+      // تطبيع رقم الهاتف
+      const normalizedPhone = normalizePhoneNumber(loginPhone);
+      
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: loginPhone,
+          phone: normalizedPhone,
           password: loginPassword,
         }),
         credentials: "include",
@@ -69,11 +73,14 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
+      // تطبيع رقم الهاتف
+      const normalizedPhone = normalizePhoneNumber(registerPhone);
+      
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: registerPhone,
+          phone: normalizedPhone,
           password: registerPassword,
           name: registerName,
           email: registerEmail,
@@ -131,12 +138,13 @@ export default function Auth() {
                   <label className="text-sm font-medium">رقم الهاتف</label>
                   <Input
                     type="tel"
-                    placeholder="+966501234567"
+                    placeholder="01032809502 أو +201032809502"
                     value={loginPhone}
                     onChange={(e) => setLoginPhone(e.target.value)}
                     disabled={isLoading}
                     required
                   />
+                  <p className="text-xs text-gray-500">يمكنك إدخال الرقم بصيغة محلية (01...) أو دولية (+20...)</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">كلمة المرور</label>
@@ -187,12 +195,13 @@ export default function Auth() {
                   <label className="text-sm font-medium">رقم الهاتف</label>
                   <Input
                     type="tel"
-                    placeholder="+966501234567"
+                    placeholder="01032809502 أو +201032809502"
                     value={registerPhone}
                     onChange={(e) => setRegisterPhone(e.target.value)}
                     disabled={isLoading}
                     required
                   />
+                  <p className="text-xs text-gray-500">يمكنك إدخال الرقم بصيغة محلية (01...) أو دولية (+20...)</p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">البريد الإلكتروني</label>
