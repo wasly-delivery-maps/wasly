@@ -4,7 +4,7 @@ import admin from "firebase-admin";
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyAZwd1Kmb1SAEx4PuoCGZm-cz_d8H30pJ8",
   authDomain: "wasly-delivery-app.firebaseapp.com",
-  projectId: "wasly-delivery-app",
+  projectId: process.env.FIREBASE_PROJECT_ID || "wasly-delivery-app",
   storageBucket: "wasly-delivery-app.firebasestorage.app",
   messagingSenderId: "716585941091",
   appId: "1:716585941091:web:78a6df408a9acd87f66056",
@@ -13,13 +13,28 @@ const firebaseConfig = {
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-  });
+  try {
+    if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+      console.log("[Firebase] Initializing Admin SDK with service account credentials...");
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: firebaseConfig.projectId,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        }),
+        storageBucket: firebaseConfig.storageBucket,
+      });
+    } else {
+      console.log("[Firebase] Initializing Admin SDK with default credentials...");
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId,
+        storageBucket: firebaseConfig.storageBucket,
+      });
+    }
+    console.log("[Firebase] Admin SDK initialized successfully");
+  } catch (error) {
+    console.error("[Firebase] Admin SDK initialization failed:", error);
+  }
 }
 
 export const db = admin.firestore();
@@ -32,7 +47,7 @@ export interface User {
   email?: string;
   name?: string;
   role: "driver" | "customer" | "admin";
-  createdAt: any; // Using any for Firestore Timestamps
+  createdAt: any;
   updatedAt?: any;
   avatar?: string;
   status?: "active" | "inactive" | "suspended";
@@ -72,21 +87,31 @@ export async function createOrUpdateUser(
 
 // Get user by UID
 export async function getUserByUid(uid: string): Promise<User | null> {
-  const doc = await db.collection("users").doc(uid).get();
-  if (!doc.exists) return null;
-  return doc.data() as User;
+  try {
+    const doc = await db.collection("users").doc(uid).get();
+    if (!doc.exists) return null;
+    return doc.data() as User;
+  } catch (error) {
+    console.error("Error getting user by UID:", error);
+    return null;
+  }
 }
 
 // Get user by phone
 export async function getUserByPhone(phone: string): Promise<User | null> {
-  const snapshot = await db
-    .collection("users")
-    .where("phone", "==", phone)
-    .limit(1)
-    .get();
+  try {
+    const snapshot = await db
+      .collection("users")
+      .where("phone", "==", phone)
+      .limit(1)
+      .get();
 
-  if (snapshot.empty) return null;
-  return snapshot.docs[0].data() as User;
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].data() as User;
+  } catch (error) {
+    console.error("Error getting user by phone:", error);
+    return null;
+  }
 }
 
 // Verify phone number
@@ -95,8 +120,6 @@ export async function verifyPhoneNumber(
   code: string
 ): Promise<boolean> {
   try {
-    // This would typically involve a third-party SMS service
-    // For now, we'll just validate the code format
     return code.length === 6 && /^\d+$/.test(code);
   } catch (error) {
     console.error("Error verifying phone:", error);
@@ -106,13 +129,18 @@ export async function verifyPhoneNumber(
 
 // Get all drivers
 export async function getAllDrivers(): Promise<User[]> {
-  const snapshot = await db
-    .collection("users")
-    .where("role", "==", "driver")
-    .where("status", "==", "active")
-    .get();
+  try {
+    const snapshot = await db
+      .collection("users")
+      .where("role", "==", "driver")
+      .where("status", "==", "active")
+      .get();
 
-  return snapshot.docs.map((doc) => doc.data() as User);
+    return snapshot.docs.map((doc) => doc.data() as User);
+  } catch (error) {
+    console.error("Error getting all drivers:", error);
+    return [];
+  }
 }
 
 // Update user status
@@ -120,8 +148,12 @@ export async function updateUserStatus(
   uid: string,
   status: "active" | "inactive" | "suspended"
 ): Promise<void> {
-  await db.collection("users").doc(uid).update({
-    status,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  try {
+    await db.collection("users").doc(uid).update({
+      status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error updating user status:", error);
+  }
 }
