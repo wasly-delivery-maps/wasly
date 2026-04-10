@@ -2,23 +2,32 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Mail, Phone, MapPin, Truck, LogOut, Home, ShoppingBag, HelpCircle, User, Settings, ShieldCheck, ChevronLeft, Camera, Edit3, Save, X, MessageCircle, Loader2, Star, TrendingUp, Award } from "lucide-react";
+import { 
+  ArrowRight, Mail, Phone, MapPin, Truck, LogOut, Home, ShoppingBag, 
+  HelpCircle, User, Settings, ShieldCheck, ChevronLeft, Camera, 
+  Edit3, Save, X, MessageCircle, Loader2, Star, TrendingUp, Award,
+  Zap, CheckCircle2
+} from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function CustomerProfile() {
   const { user, loading, logout } = useAuth();
   const [, navigate] = useLocation();
   const [isEditing, setIsEditing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [editData, setEditData] = useState({
     name: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || "",
   });
+
   const ordersQuery = trpc.orders.getCustomerOrders.useQuery();
   const updateProfileMutation = trpc.users.updateProfile.useMutation();
 
@@ -56,6 +65,54 @@ export default function CustomerProfile() {
     }
   };
 
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // التحقق من نوع الملف وحجمه
+    if (!file.type.startsWith('image/')) {
+      toast.error("يرجى اختيار ملف صورة صالح");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("حجم الصورة كبير جداً (الحد الأقصى 5 ميجابايت)");
+      return;
+    }
+
+    setUploading(true);
+    const toastId = toast.loading("جاري رفع الصورة...");
+
+    try {
+      // هنا يتم منطق الرفع للسيرفر أو S3
+      // لمحاكاة الرفع وتحديث الواجهة:
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        try {
+          // تحديث البروفايل بالصورة الجديدة (Base64 أو رابط بعد الرفع)
+          await updateProfileMutation.mutateAsync({
+            ...editData,
+            avatarUrl: base64String // نفترض أن الـ API يدعم avatarUrl
+          });
+          toast.success("تم تحديث الصورة الشخصية بنجاح", { id: toastId });
+        } catch (err) {
+          toast.error("فشل في حفظ الصورة على الخادم", { id: toastId });
+        } finally {
+          setUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error("حدث خطأ أثناء معالجة الصورة", { id: toastId });
+      setUploading(false);
+    }
+  };
+
   const orders = ordersQuery.data || [];
   const completedOrders = orders.filter((o) => o.status === "delivered").length;
   const activeOrders = orders.filter((o) => !["delivered", "cancelled"].includes(o.status)).length;
@@ -83,6 +140,16 @@ export default function CustomerProfile() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 text-slate-900 font-sans" dir="rtl">
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/*"
+        capture="user"
+        onChange={handleFileChange}
+      />
+
       {/* Dynamic Header */}
       <motion.div 
         className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white pt-12 pb-32 relative overflow-hidden"
@@ -154,7 +221,7 @@ export default function CustomerProfile() {
             initial="hidden"
             animate="visible"
           >
-            {/* Avatar */}
+            {/* Avatar Section */}
             <motion.div 
               className="relative group"
               variants={itemVariants}
@@ -165,22 +232,39 @@ export default function CustomerProfile() {
                 animate={{ rotate: [0, 5, -5, 0] }}
                 transition={{ duration: 4, repeat: Infinity }}
               >
-                <div className="h-full w-full rounded-3xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center overflow-hidden">
-                  <motion.div
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    <User className="h-16 w-16 text-orange-500" />
-                  </motion.div>
+                <div className="h-full w-full rounded-3xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center overflow-hidden relative">
+                  {user.avatarUrl ? (
+                    <img 
+                      src={user.avatarUrl} 
+                      alt={user.name} 
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <motion.div
+                      animate={{ scale: [1, 1.1, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      <User className="h-16 w-16 text-orange-500" />
+                    </motion.div>
+                  )}
+                  
+                  {uploading && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 text-white animate-spin" />
+                    </div>
+                  )}
                 </div>
               </motion.div>
-              <motion.div 
-                className="absolute -bottom-2 -right-2 h-10 w-10 bg-white rounded-xl flex items-center justify-center text-slate-900 shadow-xl cursor-pointer hover:scale-110 transition-all"
+              
+              <motion.button 
+                onClick={handleImageClick}
+                disabled={uploading}
+                className="absolute -bottom-2 -right-2 h-10 w-10 bg-white rounded-xl flex items-center justify-center text-slate-900 shadow-xl cursor-pointer hover:scale-110 transition-all z-30"
                 whileHover={{ scale: 1.2, rotate: 10 }}
                 whileTap={{ scale: 0.9 }}
               >
                 <Camera className="h-5 w-5" />
-              </motion.div>
+              </motion.button>
             </motion.div>
             
             {/* User Info */}
@@ -499,6 +583,3 @@ export default function CustomerProfile() {
     </div>
   );
 }
-
-// Missing imports - add to top if needed
-import { Loader2, Zap, CheckCircle2 } from "lucide-react";
