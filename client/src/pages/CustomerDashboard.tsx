@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Plus, LogOut, User, Truck, Clock, DollarSign, X, Phone, Calendar, ChevronRight, Package, Search, CheckCircle2, Loader2, TrendingUp, Award, Zap } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { MapPin, Plus, LogOut, User, Truck, Clock, DollarSign, X, Phone, Calendar, ChevronRight, Package, Search, CheckCircle2, Loader2, TrendingUp, Award, Zap, Navigation, Info } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,11 +52,24 @@ function CancelOrderButton({ orderId, onSuccess }: { orderId: number; onSuccess:
 export default function CustomerDashboard() {
   const { user, loading, logout } = useAuth();
   const [, navigate] = useLocation();
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
   const ordersQuery = trpc.orders.getCustomerOrders.useQuery(undefined, {
     refetchInterval: 5000,
   });
 
+  const orderDetailsQuery = trpc.orders.getOrderDetails.useQuery(
+    { orderId: selectedOrderId as number },
+    { enabled: !!selectedOrderId && isDetailsOpen }
+  );
+
   const orders = useMemo(() => ordersQuery.data || [], [ordersQuery.data]);
+
+  const handleShowDetails = (orderId: number) => {
+    setSelectedOrderId(orderId);
+    setIsDetailsOpen(true);
+  };
 
   if (loading) {
     return (
@@ -339,6 +353,7 @@ export default function CustomerDashboard() {
                                         <Button 
                                           variant="outline" 
                                           size="sm" 
+                                          onClick={() => handleShowDetails(order.id)}
                                           className="rounded-lg font-bold text-xs border-orange-200 text-orange-600 hover:bg-orange-50 transition-all"
                                         >
                                           التفاصيل
@@ -476,6 +491,123 @@ export default function CustomerDashboard() {
           </motion.div>
         </motion.div>
       </main>
+
+      {/* Order Details Modal */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl" dir="rtl">
+          <DialogHeader className="p-6 bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <Package className="h-5 w-5 text-orange-500" />
+                تفاصيل الطلب #{selectedOrderId}
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-slate-400 font-medium">
+              معلومات كاملة عن حالة وموقع طلبك
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+            {orderDetailsQuery.isLoading ? (
+              <div className="py-20 flex flex-col items-center justify-center gap-4">
+                <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
+                <p className="text-slate-500 font-bold">جاري تحميل البيانات...</p>
+              </div>
+            ) : orderDetailsQuery.data ? (
+              <>
+                {/* Status Section */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl ${getStatusInfo(orderDetailsQuery.data.status).color.split(' ')[0]}`}>
+                      {(() => {
+                        const Icon = getStatusInfo(orderDetailsQuery.data.status).icon;
+                        return <Icon className="h-5 w-5" />;
+                      })()}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الحالة الحالية</p>
+                      <p className="text-sm font-black text-slate-900">{getStatusInfo(orderDetailsQuery.data.status).label}</p>
+                    </div>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">التكلفة</p>
+                    <p className="text-lg font-black text-orange-600">ج.م {orderDetailsQuery.data.price}</p>
+                  </div>
+                </div>
+
+                {/* Locations */}
+                <div className="space-y-4 relative">
+                  <div className="absolute right-[19px] top-8 bottom-8 w-0.5 bg-dashed border-r-2 border-slate-100 border-dashed" />
+                  
+                  <div className="flex items-start gap-4 relative z-10">
+                    <div className="h-10 w-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-orange-100">
+                      <MapPin className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                      <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">نقطة الاستلام</p>
+                      <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.pickupLocation.address}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4 relative z-10">
+                    <div className="h-10 w-10 rounded-xl bg-blue-500 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-blue-100">
+                      <Navigation className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">وجهة التسليم</p>
+                      <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.deliveryLocation.address}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Zap className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="text-[10px] font-black text-slate-400 uppercase">المسافة</span>
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.distance.toFixed(1)} كم</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="text-[10px] font-black text-slate-400 uppercase">الوقت المتوقع</span>
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.estimatedTime} دقيقة</p>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {orderDetailsQuery.data.notes && (
+                  <div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Info className="h-4 w-4 text-orange-500" />
+                      <span className="text-xs font-black text-orange-600">ملاحظات الطلب</span>
+                    </div>
+                    <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                      {orderDetailsQuery.data.notes}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="py-10 text-center">
+                <p className="text-rose-500 font-bold">فشل في تحميل تفاصيل الطلب</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="p-6 bg-slate-50 border-t border-slate-100">
+            <Button 
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black h-12 rounded-xl shadow-lg transition-all"
+              onClick={() => setIsDetailsOpen(false)}
+            >
+              إغلاق النافذة
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
