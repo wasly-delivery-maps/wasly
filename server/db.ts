@@ -328,7 +328,7 @@ export async function updateDriverLocation(
  */
 export async function updateUserProfile(
   userId: number,
-  data: { name?: string; email?: string; phone?: string }
+  data: { name?: string; email?: string; phone?: string; avatarUrl?: string }
 ) {
   const db = await getDb();
   if (!db) {
@@ -341,6 +341,7 @@ export async function updateUserProfile(
     if (data.name !== undefined) updateSet.name = data.name;
     if (data.email !== undefined) updateSet.email = data.email;
     if (data.phone !== undefined) updateSet.phone = data.phone;
+    if (data.avatarUrl !== undefined) updateSet.avatarUrl = data.avatarUrl;
 
     if (Object.keys(updateSet).length === 0) {
       return await getUserById(userId);

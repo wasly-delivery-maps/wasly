@@ -16,7 +16,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function CustomerProfile() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, refresh } = useAuth();
   const [, navigate] = useLocation();
   const [isEditing, setIsEditing] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -88,19 +88,18 @@ export default function CustomerProfile() {
     const toastId = toast.loading("جاري رفع الصورة...");
 
     try {
-      // هنا يتم منطق الرفع للسيرفر أو S3
-      // لمحاكاة الرفع وتحديث الواجهة:
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         try {
-          // تحديث البروفايل بالصورة الجديدة (Base64 أو رابط بعد الرفع)
           await updateProfileMutation.mutateAsync({
             ...editData,
-            avatarUrl: base64String // نفترض أن الـ API يدعم avatarUrl
+            avatarUrl: base64String
           });
+          await refresh(); // تحديث بيانات المستخدم في الحالة العامة
           toast.success("تم تحديث الصورة الشخصية بنجاح", { id: toastId });
         } catch (err) {
+          console.error("Upload error:", err);
           toast.error("فشل في حفظ الصورة على الخادم", { id: toastId });
         } finally {
           setUploading(false);

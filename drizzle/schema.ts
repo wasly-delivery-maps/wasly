@@ -37,6 +37,7 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn"),
   loginMethod: varchar("loginMethod", { length: 64 }),
+  avatarUrl: text("avatarUrl"),
 });
 
 /**
