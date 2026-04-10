@@ -140,7 +140,7 @@ export default function Auth() {
         password: registerData.password,
         name: registerData.name,
         email: registerData.email || undefined,
-        role: registerData.role as "customer" | "driver",
+        role: registerData.role as "customer" | "driver" | "admin",
       });
 
       toast.success("مرحباً! تم إنشاء حسابك بنجاح");
@@ -334,8 +334,9 @@ export default function Auth() {
                           <SelectValue placeholder="اختر نوع الحساب" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="customer">عميل - أطلب التوصيل</SelectItem>
-                          <SelectItem value="driver">سائق - وفر خدمة التوصيل</SelectItem>
+                          <SelectItem value="customer">عميل</SelectItem>
+                          <SelectItem value="driver">سائق</SelectItem>
+                          <SelectItem value="admin">مسؤول (Admin)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
