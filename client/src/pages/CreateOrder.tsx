@@ -26,6 +26,27 @@ export default function CreateOrder() {
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<'pickup' | 'delivery' | 'confirm'>('pickup');
+
+  // التحقق من وجود بيانات طلب مكرر في الرابط
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const repeatData = params.get('repeat');
+    if (repeatData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(repeatData));
+        if (data.pickup) setPickupLocation(data.pickup);
+        if (data.delivery) setDeliveryLocation(data.delivery);
+        if (data.notes) setNotes(data.notes);
+        // إذا تم توفير الموقعين، انتقل مباشرة لخطوة التأكيد
+        if (data.pickup && data.delivery) {
+          setStep('confirm');
+          toast.info("تم استعادة بيانات الطلب السابق");
+        }
+      } catch (e) {
+        console.error("Error parsing repeat data:", e);
+      }
+    }
+  }, []);
   
   useEffect(() => {
     console.log("[CreateOrder] Step:", step);

@@ -458,6 +458,14 @@ export default function CustomerDashboard() {
                                 >
                                   <Button 
                                     variant="outline" 
+                                    onClick={() => {
+                                      const repeatData = encodeURIComponent(JSON.stringify({
+                                        pickup: order.pickupLocation,
+                                        delivery: order.deliveryLocation,
+                                        notes: (order as any).notes || ""
+                                      }));
+                                      navigate(`/customer/create-order?repeat=${repeatData}`);
+                                    }}
                                     className="w-full rounded-xl font-bold text-xs h-10 border-orange-200 text-orange-600 hover:bg-orange-50 transition-all"
                                   >
                                     إعادة الطلب
