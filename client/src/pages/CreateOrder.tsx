@@ -23,15 +23,15 @@ export default function CreateOrder() {
   const [, navigate] = useLocation();
   const [pickupLocation, setPickupLocation] = useState<LocationData | null>(null);
   const [deliveryLocation, setDeliveryLocation] = useState<LocationData | null>(null);
+  const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState<'pickup' | 'delivery' | 'confirm'>('pickup');
   
   useEffect(() => {
     console.log("[CreateOrder] Step:", step);
     console.log("[CreateOrder] Pickup:", pickupLocation);
     console.log("[CreateOrder] Delivery:", deliveryLocation);
   }, [step, pickupLocation, deliveryLocation]);
-  const [notes, setNotes] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [step, setStep] = useState<'pickup' | 'delivery' | 'confirm'>('pickup');
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
   const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
 
