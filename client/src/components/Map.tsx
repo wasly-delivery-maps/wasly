@@ -99,7 +99,8 @@ function loadMapScript() {
     const baseUrl = isProxy 
       ? `${import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev"}/v1/maps/proxy/maps/api/js`
       : "https://maps.googleapis.com/maps/api/js";
-    script.src = `${baseUrl}?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry,routes`;
+    // استخدام v=quarterly لضمان الاستقرار وإضافة جميع المكتبات اللازمة
+    script.src = `${baseUrl}?key=${API_KEY}&v=quarterly&libraries=marker,places,geocoding,geometry,routes`;
     script.async = true;
     script.crossOrigin = "anonymous";
     script.onload = () => {
