@@ -63,22 +63,9 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
-  // Authentication routes
-  registerAuthRoutes(app);
-  
   // Health check endpoint for Railway/Docker
   app.get("/health", (req, res) => {
     res.status(200).json({ ok: true, timestamp: new Date().toISOString() });
-  });
-  
-  // SSE Notifications endpoint
-  app.get("/api/notifications/subscribe/:userId", (req, res) => {
-    const userId = parseInt(req.params.userId);
-    if (isNaN(userId)) {
-      res.status(400).json({ error: "Invalid user ID" });
-      return;
-    }
-    registerSSEConnection(userId, res);
   });
 
   // Temporary endpoint to promote user to admin
@@ -108,6 +95,19 @@ async function startServer() {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  });
+
+  // Authentication routes
+  registerAuthRoutes(app);
+  
+  // SSE Notifications endpoint
+  app.get("/api/notifications/subscribe/:userId", (req, res) => {
+    const userId = parseInt(req.params.userId);
+    if (isNaN(userId)) {
+      res.status(400).json({ error: "Invalid user ID" });
+      return;
+    }
+    registerSSEConnection(userId, res);
   });
   
   // tRPC API
