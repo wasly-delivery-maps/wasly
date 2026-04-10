@@ -33,7 +33,7 @@ const inMemoryDB: InMemoryDB = {
 };
 
 let _db: ReturnType<typeof drizzle> | null = null;
-let _useInMemory = false; // Force TiDB
+let _useInMemory = false;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
@@ -50,7 +50,9 @@ export async function getDb() {
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
-        ssl: 'amazon',
+        ssl: {
+          rejectUnauthorized: false
+        },
         enableKeepAlive: true,
         keepAliveInitialDelaySeconds: 0,
       });
@@ -58,10 +60,9 @@ export async function getDb() {
       _useInMemory = false;
       console.log("[Database] Connected to TiDB successfully");
     } catch (error: any) {
-      console.warn("[Database] Failed to connect to TiDB:", error.message || error);
-      // Fallback to in-memory only if absolutely necessary
-      _db = null;
-      _useInMemory = true;
+      console.error("[Database] CRITICAL: Failed to connect to TiDB:", error.message || error);
+      // We do NOT fallback to in-memory here to ensure data consistency
+      throw new Error("Database connection failed");
     }
   }
   return _db;
