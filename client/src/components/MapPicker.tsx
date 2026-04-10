@@ -41,17 +41,24 @@ export default function MapPicker({
     }
 
     try {
+      // محاولة البحث مع قيود جغرافية لمصر ولكن بدون قيود صارمة على العناوين الطويلة أو الأكواد
       const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-        geocoderRef.current?.geocode(
-          { address: searchValue, componentRestrictions: { country: "EG" } },
-          (results, status) => {
-            if (status === google.maps.GeocoderStatus.OK && results) {
-              resolve(results);
-            } else {
-              reject(new Error("لم يتم العثور على الموقع"));
-            }
+        const request: google.maps.GeocoderRequest = { 
+          address: searchValue,
+        };
+        
+        // إذا كان العنوان يبدو محلياً (لا يحتوي على "Egypt" أو "مصر")، نضيف قيد الدولة
+        if (!searchValue.toLowerCase().includes("egypt") && !searchValue.includes("مصر")) {
+          request.componentRestrictions = { country: "EG" };
+        }
+
+        geocoderRef.current?.geocode(request, (results, status) => {
+          if (status === google.maps.GeocoderStatus.OK && results) {
+            resolve(results);
+          } else {
+            reject(new Error(`Geocoding failed: ${status}`));
           }
-        );
+        });
       });
 
       if (results.length === 0) {
@@ -83,11 +90,9 @@ export default function MapPicker({
             position: { lat, lng },
             title: address,
           });
-        } else {
-          console.warn("[Maps] Google Maps not available for marker creation");
         }
       } catch (error) {
-        console.error("[Maps] خطأ في إضافة marker:", error);
+        console.error("[Maps] Error adding marker:", error);
       }
 
       // استدعاء callback
@@ -97,10 +102,10 @@ export default function MapPicker({
         longitude: lng,
       };
       onLocationSelect(locationData);
-      toast.success("تم البحث عن الموقع بنجاح: " + address);
+      toast.success("تم العثور على الموقع");
     } catch (error) {
-      console.error("خطأ في البحث:", error);
-      toast.error("فشل البحث عن الموقع");
+      console.error("Search error:", error);
+      toast.error("فشل البحث عن الموقع. جرب كتابة اسم المكان بوضوح.");
     }
   }, [searchValue, onLocationSelect, mapRef]);
 
@@ -260,12 +265,19 @@ export default function MapPicker({
         <p className="text-sm text-blue-900">{title}</p>
       </div>
       
+      <MapView
+        initialCenter={{ lat: 30.1145, lng: 31.3850 }} // Al-Obour First District (الحي الأول - العبور) coordinates
+        initialZoom={16}
+        onMapReady={handleMapReady}
+        className="h-[400px] rounded-lg border border-border"
+      />
+
       <div className="space-y-3">
         <div className="flex gap-2">
           <Input
             ref={searchInputRef}
             type="text"
-            placeholder="ابحث عن عنوان أو مكان..."
+            placeholder="ابحث عن عنوان، مكان، أو كود (مثل: 6FP9+CQV)..."
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             onKeyPress={(e) => {
@@ -273,27 +285,22 @@ export default function MapPicker({
                 handleSearch();
               }
             }}
-            className="w-full text-right"
+            className="w-full text-right bg-white shadow-sm border-slate-200 focus:border-orange-500 focus:ring-orange-200"
             dir="rtl"
           />
-          {searchValue.trim() && (
-            <Button
-              onClick={handleSearch}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4"
-              size="sm"
-            >
-              <Search className="w-4 h-4" />
-            </Button>
-          )}
+          <Button
+            onClick={handleSearch}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-6 shadow-md transition-all active:scale-95"
+            size="sm"
+          >
+            <Search className="w-4 h-4 ml-2" />
+            بحث
+          </Button>
         </div>
+        <p className="text-[10px] text-slate-400 text-right px-1">
+          يمكنك البحث باسم المحل، الشارع، أو نسخ كود الموقع من خرائط جوجل
+        </p>
       </div>
-      
-      <MapView
-        initialCenter={{ lat: 30.1145, lng: 31.3850 }} // Al-Obour First District (الحي الأول - العبور) coordinates
-        initialZoom={16}
-        onMapReady={handleMapReady}
-        className="h-[400px] rounded-lg border border-border"
-      />
     </div>
   );
 }
