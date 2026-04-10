@@ -157,16 +157,26 @@ export default function MapPicker({
       // تحديث مركز الخريطة
       map.setCenter({ lat, lng });
 
-      // إنشء بيانات الموقع
+      // إنشاء بيانات الموقع
       const location: LocationData = {
         address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
         latitude: lat,
         longitude: lng,
       };
 
-      // استدعاء callback مع البيانات المحددة
-      onLocationSelect(location);
-      toast.success("تم اختيار الموقع بنجاح");
+      // محاولة الحصول على عنوان نصي (Reverse Geocoding)
+      if (!geocoderRef.current) {
+        geocoderRef.current = new google.maps.Geocoder();
+      }
+
+      geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === "OK" && results && results[0]) {
+          location.address = results[0].formatted_address;
+        }
+        // استدعاء callback مع البيانات المحددة (سواء بالعنوان النصي أو الإحداثيات)
+        onLocationSelect(location);
+        toast.success("تم اختيار الموقع بنجاح");
+      });
     });
   }, [onLocationSelect]);
 

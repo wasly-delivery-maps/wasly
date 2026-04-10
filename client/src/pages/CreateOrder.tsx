@@ -195,7 +195,10 @@ export default function CreateOrder() {
             size="icon"
             className="rounded-xl shadow-lg pointer-events-auto bg-white hover:bg-slate-50 text-slate-900 h-12 w-12 border border-slate-200"
             onClick={() => {
-              if (step === 'delivery') setStep('pickup');
+              if (step === 'delivery') {
+                setDeliveryLocation(null);
+                setStep('pickup');
+              }
               else if (step === 'confirm') setStep('delivery');
               else navigate("/customer/dashboard");
             }}
@@ -354,7 +357,7 @@ export default function CreateOrder() {
                       whileHover={{ borderColor: '#2563eb' }}
                     >
                       <p className="text-sm font-bold text-slate-700 line-clamp-2">
-                        {deliveryLocation?.address || "اضغط على الخريطة لتحديد الوجهة"}
+                        {deliveryLocation ? deliveryLocation.address : "اضغط على الخريطة لتحديد الوجهة"}
                       </p>
                     </motion.div>
 
