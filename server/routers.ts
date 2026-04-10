@@ -187,7 +187,6 @@ export const appRouter = router({
         email: user.email,
         role: user.role,
         isActive: user.isActive,
-        avatarUrl: user.avatarUrl,
         latitude: user.latitude ? parseFloat(user.latitude.toString()) : null,
         longitude: user.longitude ? parseFloat(user.longitude.toString()) : null,
       };
@@ -200,7 +199,6 @@ export const appRouter = router({
           name: z.string().min(2).optional(),
           email: z.string().email().optional(),
           phone: z.string().min(10).optional(),
-          avatarUrl: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -216,7 +214,6 @@ export const appRouter = router({
             name: updatedUser.name,
             email: updatedUser.email,
             role: updatedUser.role,
-            avatarUrl: updatedUser.avatarUrl,
           },
         };
       }),

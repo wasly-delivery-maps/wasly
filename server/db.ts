@@ -136,7 +136,7 @@ export async function upsertUser(user: InsertUser): Promise<any> {
       updateSet.password = user.password;
     }
 
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "email", "loginMethod", "avatarUrl"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
@@ -328,7 +328,7 @@ export async function updateDriverLocation(
  */
 export async function updateUserProfile(
   userId: number,
-  data: { name?: string; email?: string; phone?: string; avatarUrl?: string }
+  data: { name?: string; email?: string; phone?: string }
 ) {
   const db = await getDb();
   if (!db) {
@@ -341,7 +341,6 @@ export async function updateUserProfile(
     if (data.name !== undefined) updateSet.name = data.name;
     if (data.email !== undefined) updateSet.email = data.email;
     if (data.phone !== undefined) updateSet.phone = data.phone;
-    if (data.avatarUrl !== undefined) updateSet.avatarUrl = data.avatarUrl;
 
     if (Object.keys(updateSet).length === 0) {
       return await getUserById(userId);
