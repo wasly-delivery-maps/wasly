@@ -113,10 +113,14 @@ export default function MapPicker({
 
   const handleMapReady = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
-
     // تحديث مركز الخريطة إلى الحي الأول بالعبور
     map.setCenter({ lat: 30.1136, lng: 31.3925 });
     map.setZoom(15);
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
 
     // إزالة listener القديم إن وجد
     if (listenerRef.current) {
@@ -125,46 +129,32 @@ export default function MapPicker({
 
     // إضافة listener جديد لحدث الضغط على الخريطة
     listenerRef.current = map.addListener("click", (event: google.maps.MapMouseEvent) => {
-      if (!event.latLng) {
-        console.error("لم يتم الحصول على الإحداثيات");
-        return;
-      }
+      if (!event.latLng) return;
 
       const lat = event.latLng.lat();
       const lng = event.latLng.lng();
-
-      console.log("تم الضغط على الخريطة:", { lat, lng });
 
       // إزالة marker القديم
       if (markerRef.current) {
         markerRef.current.map = null;
       }
 
-      // إضافة marker جديد باستخدام AdvancedMarkerElement
+      // إضافة marker جديد
       try {
         markerRef.current = new google.maps.marker.AdvancedMarkerElement({
           map,
           position: { lat, lng },
-          title: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
         });
-        console.log("تم إضافة marker بنجاح");
       } catch (error) {
-        console.error("خطأ في إضافة marker:", error);
-        toast.error("فشل في إضافة marker على الخريطة");
-        return;
+        console.error("Marker error:", error);
       }
 
-      // تحديث مركز الخريطة
-      map.setCenter({ lat, lng });
-
-      // إنشاء بيانات الموقع
       const location: LocationData = {
         address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
         latitude: lat,
         longitude: lng,
       };
 
-      // محاولة الحصول على عنوان نصي (Reverse Geocoding)
       if (!geocoderRef.current) {
         geocoderRef.current = new google.maps.Geocoder();
       }
@@ -173,11 +163,17 @@ export default function MapPicker({
         if (status === "OK" && results && results[0]) {
           location.address = results[0].formatted_address;
         }
-        // استدعاء callback مع البيانات المحددة (سواء بالعنوان النصي أو الإحداثيات)
-        onLocationSelect(location);
+        console.log("[MapPicker] Location selected:", location);
+        onLocationSelect({ ...location });
         toast.success("تم اختيار الموقع بنجاح");
       });
     });
+
+    return () => {
+      if (listenerRef.current) {
+        google.maps.event.removeListener(listenerRef.current);
+      }
+    };
   }, [onLocationSelect]);
 
   // إعداد Google Places Autocomplete
