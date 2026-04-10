@@ -1,15 +1,16 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { MapPin, ArrowRight, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { MapPin, ArrowRight, Loader2, ChevronLeft, Navigation, Info, DollarSign, Truck, CheckCircle2, X } from "lucide-react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import MapPicker from "@/components/MapPicker";
-import { calculateOrderPrice, formatPrice } from "@shared/pricing";
+import { formatPrice } from "@shared/pricing";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface LocationData {
   address: string;
@@ -24,16 +25,19 @@ export default function CreateOrder() {
   const [deliveryLocation, setDeliveryLocation] = useState<LocationData | null>(null);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPickupMap, setShowPickupMap] = useState(false);
-  const [showDeliveryMap, setShowDeliveryMap] = useState(false);
+  const [step, setStep] = useState<'pickup' | 'delivery' | 'confirm'>('pickup');
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
-  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
-  const [distanceCalculationMethod, setDistanceCalculationMethod] = useState<'direct' | 'route'>('route');
   const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
 
   const createOrderMutation = trpc.orders.createOrder.useMutation();
 
-  // حساب المسافة باستخدام Google Maps Directions API
+  // حساب المسافة والسعر تلقائياً عند اختيار الموقعين
+  useEffect(() => {
+    if (pickupLocation && deliveryLocation) {
+      calculatePrice();
+    }
+  }, [pickupLocation, deliveryLocation]);
+
   const calculateDistanceViaGoogle = async (
     lat1: number,
     lon1: number,
@@ -54,16 +58,14 @@ export default function CreateOrder() {
         if (route.legs) {
           for (const leg of route.legs) {
             if (leg.distance) {
-              totalDistance += leg.distance.value; // المسافة بالمتر
+              totalDistance += leg.distance.value;
             }
           }
         }
-        return totalDistance / 1000; // تحويل إلى كيلومتر
+        return totalDistance / 1000;
       }
       throw new Error('No route found');
     } catch (error) {
-      console.error('Error calculating distance:', error);
-      // في حالة الخطأ، استخدم صيغة Haversine كبديل
       const R = 6371;
       const dLat = ((lat2 - lat1) * Math.PI) / 180;
       const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -78,66 +80,29 @@ export default function CreateOrder() {
     }
   };
 
-  // حساب المسافة المباشرة (Haversine)
-  const calculateDirectDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  // حساب السعر عند اختيار الموقع
-  const handleCalculatePrice = async () => {
-    if (!pickupLocation || !deliveryLocation) {
-      toast.error("يرجى اختيار موقع الاستلام والتسليم");
-      return;
-    }
-
-    setIsCalculatingPrice(true);
+  const calculatePrice = async () => {
+    if (!pickupLocation || !deliveryLocation) return;
+    
     try {
-      let distance: number;
-      
-      if (distanceCalculationMethod === 'direct') {
-        // استخدام المسافة المباشرة
-        distance = calculateDirectDistance(
-          pickupLocation.latitude,
-          pickupLocation.longitude,
-          deliveryLocation.latitude,
-          deliveryLocation.longitude
-        );
-      } else {
-        // استخدام Google Maps
-        distance = await calculateDistanceViaGoogle(
-          pickupLocation.latitude,
-          pickupLocation.longitude,
-          deliveryLocation.latitude,
-          deliveryLocation.longitude
-        );
-      }
+      const distance = await calculateDistanceViaGoogle(
+        pickupLocation.latitude,
+        pickupLocation.longitude,
+        deliveryLocation.latitude,
+        deliveryLocation.longitude
+      );
       
       setCalculatedDistance(distance);
-      // استخدام النموذج الموحد: 25 ج.م لأول 3 كم + 5 ج.م/كم إضافي
       const price = distance <= 3 ? 25 : 25 + (distance - 3) * 5;
       setEstimatedPrice(price);
-      toast.success(`تم حساب السعر: ${formatPrice(price)} (المسافة: ${distance.toFixed(2)} كم)`);
     } catch (error) {
-      toast.error("فشل في حساب السعر");
-    } finally {
-      setIsCalculatingPrice(false);
+      console.error("Price calculation error:", error);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="h-12 w-12 text-orange-600 animate-spin" />
       </div>
     );
   }
@@ -148,13 +113,8 @@ export default function CreateOrder() {
   }
 
   const handleCreateOrder = async () => {
-    if (!pickupLocation || !deliveryLocation) {
-      toast.error("يرجى اختيار موقع الاستلام والتسليم");
-      return;
-    }
-
-    if (!estimatedPrice) {
-      toast.error("يرجى حساب السعر أولاً");
+    if (!pickupLocation || !deliveryLocation || !estimatedPrice) {
+      toast.error("يرجى إكمال بيانات الطلب أولاً");
       return;
     }
 
@@ -176,276 +136,212 @@ export default function CreateOrder() {
         price: estimatedPrice,
         notes: notes || undefined,
       });
-      toast.success("تم إنشاء الطلب بنجاح");
+      toast.success("🚀 تم إرسال طلبك بنجاح! جاري البحث عن سائق...");
       navigate("/customer/dashboard");
     } catch (error) {
-      console.error("Error creating order:", error);
-      toast.error("فشل في إنشاء الطلب");
+      toast.error("فشل في إنشاء الطلب، يرجى المحاولة مرة أخرى");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background" dir="rtl">
-      {/* Header */}
-      <div className="gradient-warm text-white py-8">
-        <div className="container">
-          <div className="flex items-center gap-4 mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-white/20"
-              onClick={() => navigate("/customer/dashboard")}
-            >
-              ← العودة
-            </Button>
-          </div>
-          <h1 className="text-4xl font-bold mb-2">إنشاء طلب توصيل جديد</h1>
-          <p className="text-white/90">اختر موقع الاستلام والتسليم لإنشاء طلبك</p>
+    <div className="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden" dir="rtl">
+      {/* Header Navigation */}
+      <div className="absolute top-6 left-6 right-6 z-50 flex justify-between items-center pointer-events-none">
+        <Button
+          variant="white"
+          size="icon"
+          className="rounded-2xl shadow-xl pointer-events-auto bg-white hover:bg-slate-50 text-slate-900 h-12 w-12"
+          onClick={() => {
+            if (step === 'delivery') setStep('pickup');
+            else if (step === 'confirm') setStep('delivery');
+            else navigate("/customer/dashboard");
+          }}
+        >
+          <ChevronLeft className="h-6 w-6 rotate-180" />
+        </Button>
+        
+        <div className="bg-slate-900/90 backdrop-blur-md text-white px-6 py-2 rounded-2xl shadow-2xl pointer-events-auto flex items-center gap-3 border border-white/10">
+          <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+          <span className="text-sm font-black tracking-tight">وصلي • طلب جديد</span>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="container py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Side - Location Selection */}
-          <div className="space-y-6">
-            {/* Pickup Location */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  موقع الاستلام
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {showPickupMap ? (
-                  <>
-                    <MapPicker
-                      onLocationSelect={(location) => {
-                        setPickupLocation(location);
-                        setShowPickupMap(false);
-                      }}
-                      title="اضغط على الخريطة لاختيار موقع الاستلام"
-                    />
-                  </>
-                ) : (
-                  <>
-                    {pickupLocation ? (
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-muted-foreground">تم اختيار الموقع</p>
-                        <p className="font-semibold text-green-700">{pickupLocation.address}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {pickupLocation.latitude.toFixed(4)}, {pickupLocation.longitude.toFixed(4)}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                        <p className="text-sm text-muted-foreground">لم يتم اختيار موقع بعد</p>
-                      </div>
-                    )}
-                    <Button
-                      onClick={() => setShowPickupMap(true)}
-                      className="w-full"
-                      variant={pickupLocation ? "outline" : "default"}
-                    >
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {pickupLocation ? "تغيير الموقع" : "اختيار الموقع من الخريطة"}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+      {/* Full Screen Map Container */}
+      <div className="flex-1 relative">
+        <MapPicker
+          onLocationSelect={(location) => {
+            if (step === 'pickup') setPickupLocation(location);
+            else if (step === 'delivery') setDeliveryLocation(location);
+          }}
+          title={step === 'pickup' ? "حدد موقع الاستلام" : "حدد وجهة التسليم"}
+        />
 
-            {/* Delivery Location */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-secondary" />
-                  موقع التسليم
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {showDeliveryMap ? (
-                  <>
-                    <MapPicker
-                      onLocationSelect={(location) => {
-                        setDeliveryLocation(location);
-                        setShowDeliveryMap(false);
-                      }}
-                      title="اضغط على الخريطة لاختيار موقع التسليم"
-                    />
-                  </>
-                ) : (
-                  <>
-                    {deliveryLocation ? (
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-muted-foreground">تم اختيار الموقع</p>
-                        <p className="font-semibold text-green-700">{deliveryLocation.address}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {deliveryLocation.latitude.toFixed(4)}, {deliveryLocation.longitude.toFixed(4)}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                        <p className="text-sm text-muted-foreground">لم يتم اختيار موقع بعد</p>
-                      </div>
-                    )}
-                    <Button
-                      onClick={() => setShowDeliveryMap(true)}
-                      className="w-full"
-                      variant={deliveryLocation ? "outline" : "default"}
-                    >
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {deliveryLocation ? "تغيير الموقع" : "اختيار الموقع من الخريطة"}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Side - Order Details */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>تفاصيل الطلب</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="notes">ملاحظات إضافية (اختياري)</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="أضف أي ملاحظات أو تعليمات خاصة للسائق..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="mt-2"
-                    rows={4}
-                  />
-                </div>
-
-                {/* Distance Calculation Method */}
-                {pickupLocation && deliveryLocation && (
-                  <Card className="border-amber-200 bg-amber-50">
-                    <CardHeader>
-                      <CardTitle className="text-sm">طريقة حساب المسافة</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-amber-100">
-                          <input
-                            type="radio"
-                            name="distance-method"
-                            value="route"
-                            checked={distanceCalculationMethod === 'route'}
-                            onChange={(e) => setDistanceCalculationMethod(e.target.value as 'route' | 'direct')}
-                            className="w-4 h-4"
-                          />
-                          <span className="flex-1">
-                            <span className="font-medium">عبر الطريق (Google Maps)</span>
-                            <p className="text-xs text-muted-foreground">حساب دقيق بناءً على الطرق الفعلية</p>
-                          </span>
-                        </label>
-                        <label className="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-amber-100">
-                          <input
-                            type="radio"
-                            name="distance-method"
-                            value="direct"
-                            checked={distanceCalculationMethod === 'direct'}
-                            onChange={(e) => setDistanceCalculationMethod(e.target.value as 'route' | 'direct')}
-                            className="w-4 h-4"
-                          />
-                          <span className="flex-1">
-                            <span className="font-medium">مسافة مباشرة (خط مستقيم)</span>
-                            <p className="text-xs text-muted-foreground">حساب سريع بناءً على الإحداثيات</p>
-                          </span>
-                        </label>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Route Summary */}
-                {pickupLocation && deliveryLocation && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
-                    <h3 className="font-semibold text-blue-900">ملخص الطلب</h3>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">من:</p>
-                        <p className="font-medium">{pickupLocation.address}</p>
-                      </div>
-                      <div className="flex justify-center py-2">
-                        <ArrowRight className="h-4 w-4 text-primary rotate-180" />
+        {/* Floating Interaction Cards */}
+        <div className="absolute bottom-8 left-6 right-6 z-50 flex flex-col gap-4 pointer-events-none">
+          <AnimatePresence mode="wait">
+            {step === 'pickup' && (
+              <motion.div
+                key="pickup-card"
+                initial={{ y: 100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 100, opacity: 0 }}
+                className="pointer-events-auto"
+              >
+                <Card className="border-none shadow-2xl bg-white/95 backdrop-blur-sm rounded-[2.5rem] overflow-hidden">
+                  <CardContent className="p-8">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="bg-orange-100 p-4 rounded-2xl">
+                        <MapPin className="h-6 w-6 text-orange-600" />
                       </div>
                       <div>
-                        <p className="text-muted-foreground">إلى:</p>
-                        <p className="font-medium">{deliveryLocation.address}</p>
+                        <h3 className="text-xl font-black text-slate-900">من أين نستلم؟</h3>
+                        <p className="text-slate-500 text-sm">حدد موقعك الحالي أو مكان الاستلام</p>
                       </div>
-                      {estimatedPrice && (
-                        <div className="pt-2 border-t border-blue-200 mt-3">
-                          <p className="text-muted-foreground">السعر المتوقع:</p>
-                          <p className="font-bold text-lg text-blue-900">{formatPrice(estimatedPrice)}</p>
-                        </div>
-                      )}
                     </div>
-                    <Button
-                      onClick={handleCalculatePrice}
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                      disabled={isCalculatingPrice}
+                    
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6">
+                      <p className="text-sm font-bold text-slate-700 line-clamp-1">
+                        {pickupLocation?.address || "اضغط على الخريطة لتحديد الموقع"}
+                      </p>
+                    </div>
+
+                    <Button 
+                      disabled={!pickupLocation}
+                      onClick={() => setStep('delivery')}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white h-16 rounded-2xl text-lg font-black shadow-lg shadow-orange-200 transition-all active:scale-95"
                     >
-                      {isCalculatingPrice ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          جاري حساب السعر...
-                        </>
+                      تأكيد موقع الاستلام <ArrowRight className="mr-2 h-5 w-5 rotate-180" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {step === 'delivery' && (
+              <motion.div
+                key="delivery-card"
+                initial={{ y: 100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 100, opacity: 0 }}
+                className="pointer-events-auto"
+              >
+                <Card className="border-none shadow-2xl bg-white/95 backdrop-blur-sm rounded-[2.5rem] overflow-hidden">
+                  <CardContent className="p-8">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="bg-blue-100 p-4 rounded-2xl">
+                        <Navigation className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900">إلى أين نذهب؟</h3>
+                        <p className="text-slate-500 text-sm">حدد وجهة التسليم النهائية</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6">
+                      <p className="text-sm font-bold text-slate-700 line-clamp-1">
+                        {deliveryLocation?.address || "اضغط على الخريطة لتحديد الوجهة"}
+                      </p>
+                    </div>
+
+                    <Button 
+                      disabled={!deliveryLocation}
+                      onClick={() => setStep('confirm')}
+                      className="w-full bg-slate-900 hover:bg-slate-800 text-white h-16 rounded-2xl text-lg font-black shadow-lg transition-all active:scale-95"
+                    >
+                      تأكيد الوجهة <ArrowRight className="mr-2 h-5 w-5 rotate-180" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {step === 'confirm' && (
+              <motion.div
+                key="confirm-card"
+                initial={{ y: 100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 100, opacity: 0 }}
+                className="pointer-events-auto"
+              >
+                <Card className="border-none shadow-2xl bg-white rounded-[2.5rem] overflow-hidden">
+                  <CardContent className="p-8">
+                    <div className="flex justify-between items-center mb-8">
+                      <h3 className="text-2xl font-black text-slate-900">ملخص الطلب</h3>
+                      <div className="bg-orange-50 text-orange-600 px-4 py-2 rounded-xl font-black text-xl">
+                        {estimatedPrice ? `ج.م ${estimatedPrice}` : "..."}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 mb-8">
+                      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+                          <MapPin className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-black text-slate-400 uppercase">الاستلام</p>
+                          <p className="text-sm font-bold text-slate-700 truncate">{pickupLocation?.address}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <Navigation className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-black text-slate-400 uppercase">التسليم</p>
+                          <p className="text-sm font-bold text-slate-700 truncate">{deliveryLocation?.address}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                          <Truck className="h-5 w-5 text-slate-400" />
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase">المسافة</p>
+                            <p className="text-sm font-bold text-slate-700">{calculatedDistance?.toFixed(1)} كم</p>
+                          </div>
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                          <Info className="h-5 w-5 text-slate-400" />
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase">الدفع</p>
+                            <p className="text-sm font-bold text-slate-700">نقدي</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-black text-slate-400 mr-2">ملاحظات إضافية (اختياري)</Label>
+                        <Textarea 
+                          placeholder="مثلاً: رقم الشقة، علامة مميزة، أو تفاصيل الشحنة..."
+                          className="rounded-2xl border-slate-100 bg-slate-50 focus:ring-orange-500 min-h-[80px] resize-none"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <Button 
+                      disabled={isSubmitting}
+                      onClick={handleCreateOrder}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white h-16 rounded-2xl text-xl font-black shadow-xl shadow-orange-200 transition-all active:scale-95 group relative overflow-hidden"
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
                       ) : (
-                        "حساب السعر"
+                        <>
+                          <span className="relative z-10">تأكيد وطلب الآن</span>
+                          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                        </>
                       )}
                     </Button>
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <Button
-                  onClick={handleCreateOrder}
-                  disabled={!pickupLocation || !deliveryLocation || isSubmitting}
-                  className="w-full h-12 text-lg"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      جاري إنشاء الطلب...
-                    </>
-                  ) : (
-                    "إنشاء الطلب"
-                  )}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/customer/dashboard")}
-                  className="w-full"
-                >
-                  إلغاء
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Info Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">معلومات مهمة</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-2">
-                <p>✓ سيتم إسناد الطلب لأقرب سائق متاح</p>
-                <p>✓ ستتلقى إشعار عند قبول السائق للطلب</p>
-                <p>✓ يمكنك تتبع موقع السائق في الوقت الفعلي</p>
-              </CardContent>
-            </Card>
-          </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
