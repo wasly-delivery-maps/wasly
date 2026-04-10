@@ -33,11 +33,11 @@ const inMemoryDB: InMemoryDB = {
 };
 
 let _db: ReturnType<typeof drizzle> | null = null;
-let _useInMemory = true; // Default to in-memory
+let _useInMemory = false; // Force TiDB
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db) {
     try {
       // Use mysql2 connection pool for TiDB
       const mysql = require('mysql2/promise');
@@ -58,14 +58,11 @@ export async function getDb() {
       _useInMemory = false;
       console.log("[Database] Connected to TiDB successfully");
     } catch (error: any) {
-      console.warn("[Database] Failed to connect:", error.message || error);
-      console.log("[Database] Falling back to in-memory database");
+      console.warn("[Database] Failed to connect to TiDB:", error.message || error);
+      // Fallback to in-memory only if absolutely necessary
       _db = null;
       _useInMemory = true;
     }
-  } else if (!_db && !process.env.DATABASE_URL) {
-    console.log("[Database] DATABASE_URL not set, using in-memory database");
-    _useInMemory = true;
   }
   return _db;
 }
