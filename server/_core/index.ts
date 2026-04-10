@@ -68,35 +68,6 @@ async function startServer() {
     res.status(200).json({ ok: true, timestamp: new Date().toISOString() });
   });
 
-  // Temporary endpoint to promote user to admin
-  app.get("/api/make-admin/:phone", async (req, res) => {
-    const { phone } = req.params;
-    const { secret } = req.query;
-
-    // Simple security check to prevent unauthorized access
-    if (secret !== "wasly-admin-secret-2026") {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-
-    try {
-      const db = await import("../db");
-      const user = await db.getUserByPhone(phone);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      await db.upsertUser({
-        openId: user.openId,
-        phone: user.phone,
-        role: "admin",
-      });
-
-      res.json({ success: true, message: `User ${phone} is now an admin` });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
   // Authentication routes
   registerAuthRoutes(app);
   

@@ -140,7 +140,7 @@ export default function Auth() {
         password: registerData.password,
         name: registerData.name,
         email: registerData.email || undefined,
-        role: registerData.role as "customer" | "driver" | "admin",
+        role: registerData.role as "customer" | "driver",
       });
 
       toast.success("مرحباً! تم إنشاء حسابك بنجاح");
@@ -336,7 +336,6 @@ export default function Auth() {
                         <SelectContent>
                           <SelectItem value="customer">عميل</SelectItem>
                           <SelectItem value="driver">سائق</SelectItem>
-                          <SelectItem value="admin">مسؤول (Admin)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
