@@ -1,17 +1,5 @@
 /**
- * GOOGLE MAPS FRONTEND INTEGRATION - ESSENTIAL GUIDE
- *
- * USAGE FROM PARENT COMPONENT:
- * ======
- *
- * const mapRef = useRef<google.maps.Map | null>(null);
- *
- * <MapView
- *   initialCenter={{ lat: 40.7128, lng: -74.0060 }}
- *   initialZoom={15}
- *   onMapReady={(map) => {
- *     mapRef.current = map; // Store to control map from parent anytime, google map itself is in charge of the re-rendering, not react state.
- * </MapView>
+ * GOOGLE MAPS FRONTEND INTEGRATION
  */
 
 /// <reference types="@types/google.maps" />
@@ -69,44 +57,86 @@ interface MapViewProps {
 
 export function MapView({
   className,
-  initialCenter = { lat: 30.2241, lng: 31.4744 }, // Al-Obour, Egypt
+  initialCenter = { lat: 30.2241, lng: 31.4744 },
   initialZoom = 12,
   onMapReady,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
 
-  // كود لإخفاء رسائل الخطأ الخاصة بجوجل مابس
+  // كود شامل لإخفاء رسائل خطأ جوجل مابس والعناصر المزعجة
   useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = `
-      /* إخفاء نافذة الخطأ المنبثقة من جوجل */
-      .gm-err-container {
+      /* إخفاء نافذة الخطأ الرئيسية */
+      .gm-err-container,
+      .gm-error-message,
+      .gm-error-overlay {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+
+      /* إخفاء أي نوافذ منبثقة من جوجل */
+      .gm-style > div:first-child > div:nth-child(2),
+      .gm-style > div:first-child > div:nth-child(3) {
         display: none !important;
       }
-      /* إخفاء تراكب "For development purposes only" */
-      .gm-style > div:first-child > div:nth-child(2) {
-        display: none !important;
-      }
+
+      /* إخفاء رسالة "For development purposes only" */
       .gm-style-cc {
         display: none !important;
       }
-      /* إخفاء زر "OK" في رسالة الخطأ */
-      .dismissButton {
+
+      /* إخفاء أزرار الإغلاق والتأكيد */
+      .dismissButton,
+      .gm-ui-hover-effect,
+      [aria-label="Close"] {
         display: none !important;
+      }
+
+      /* إخفاء أي عناصر تحتوي على كلمة "error" أو "Error" */
+      [class*="error"],
+      [class*="Error"] {
+        display: none !important;
+      }
+
+      /* ضمان عدم ظهور أي نصوص خطأ */
+      .gm-style > div > div {
+        filter: opacity(0) !important;
       }
     `;
     document.head.appendChild(style);
 
-    // محاولة إغلاق أي نافذة منبثقة تظهر تلقائياً
-    const interval = setInterval(() => {
-      const dismissButtons = document.querySelectorAll('.dismissButton');
-      dismissButtons.forEach((btn: any) => btn.click());
-    }, 1000);
+    // محاولة إغلاق أي نافذة منبثقة تظهر
+    const observer = new MutationObserver(() => {
+      // البحث عن أي عناصر تحتوي على رسائل خطأ وإخفاؤها
+      const errorElements = document.querySelectorAll('[role="dialog"], .gm-err-container, .gm-error-message');
+      errorElements.forEach((el: any) => {
+        el.style.display = 'none';
+        el.style.visibility = 'hidden';
+      });
+
+      // محاولة النقر على أي أزرار إغلاق موجودة
+      const closeButtons = document.querySelectorAll('[aria-label="Close"], .dismissButton');
+      closeButtons.forEach((btn: any) => {
+        try {
+          btn.click();
+        } catch (e) {}
+      });
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class']
+    });
 
     return () => {
       document.head.removeChild(style);
-      clearInterval(interval);
+      observer.disconnect();
     };
   }, []);
 
