@@ -37,12 +37,17 @@ export default function MapPicker({
     }
 
     try {
-      // استخدام Nominatim API (OpenStreetMap) للبحث المجاني عن العناوين
-      // يدعم البحث بالأسماء، العناوين، وأكواد Plus Codes
+      // تحسين البحث المجاني (Nominatim) ليكون أكثر مرونة ودقة
+      // نقوم بإضافة "العبور، مصر" تلقائياً إذا لم تكن موجودة لزيادة دقة البحث المحلي
+      let query = searchValue;
+      if (!query.toLowerCase().includes("العبور") && !query.toLowerCase().includes("obour")) {
+        query += " العبور، مصر";
+      }
+
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          searchValue
-        )}&countrycodes=eg&addressdetails=1&limit=1`,
+          query
+        )}&addressdetails=1&limit=5`,
         {
           headers: {
             'Accept-Language': 'ar,en',
@@ -51,17 +56,42 @@ export default function MapPicker({
         }
       );
 
-      const results = await response.json();
+      let results = await response.json();
+
+      // إذا فشل البحث الأول، نحاول البحث بالاسم الأصلي فقط بدون إضافات
+      if (!results || results.length === 0) {
+        const fallbackResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            searchValue
+          )}&addressdetails=1&limit=5`,
+          {
+            headers: {
+              'Accept-Language': 'ar,en',
+              'User-Agent': 'WaslyDeliveryApp/1.0'
+            }
+          }
+        );
+        results = await fallbackResponse.json();
+      }
 
       if (!results || results.length === 0) {
-        toast.error("لم يتم العثور على الموقع. حاول كتابة اسم المكان بدقة.");
+        toast.error("لم يتم العثور على الموقع. حاول كتابة اسم المكان أو الشارع بوضوح.");
         return;
       }
 
-      const location = results[0];
+      // اختيار النتيجة الأكثر صلة (نفضل النتائج في مصر والعبور)
+      const location = results.find((r: any) => 
+        r.display_name.includes("Egypt") || r.display_name.includes("مصر")
+      ) || results[0];
+
       const lat = parseFloat(location.lat);
       const lng = parseFloat(location.lon);
-      const address = location.display_name;
+      
+      // تنظيف العنوان ليظهر بشكل أجمل (نأخذ أول جزئين من العنوان الطويل)
+      const addressParts = location.display_name.split(',');
+      const address = addressParts.length > 2 
+        ? `${addressParts[0].trim()}, ${addressParts[1].trim()}` 
+        : location.display_name;
 
       // تحديث خريطة جوجل بناءً على نتائج البحث المجانية
       if (mapRef.current) {
