@@ -144,10 +144,10 @@ export default function CustomerDashboard() {
             <Link href="/">
               <div className="flex items-center gap-2 cursor-pointer">
                 <motion.div 
-                  className="bg-gradient-to-br from-orange-500 to-orange-600 p-2 rounded-lg shadow-lg"
+                  className="bg-white p-1 rounded-full shadow-md border border-orange-100 overflow-hidden"
                   whileHover={{ scale: 1.1, rotate: 5 }}
                 >
-                  <Truck className="h-5 w-5 text-white" />
+                  <img src="/logo.jpg" alt="وصلي" className="h-5 w-5 object-contain" />
                 </motion.div>
                 <span className="text-xl font-black bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">وصلي</span>
               </div>

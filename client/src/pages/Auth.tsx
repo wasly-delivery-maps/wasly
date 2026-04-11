@@ -189,8 +189,8 @@ export default function Auth() {
 
             <div className="space-y-4 pt-8">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Truck className="w-6 h-6" />
+                <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden shadow-lg border border-white/20">
+                  <img src="/logo.jpg" alt="وصلي" className="w-8 h-8 object-contain" />
                 </div>
                 <div>
                   <div className="font-semibold">توصيل سريع</div>

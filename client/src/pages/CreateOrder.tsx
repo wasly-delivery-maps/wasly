@@ -239,12 +239,10 @@ export default function CreateOrder() {
           animate={{ scale: [1, 1.02, 1] }}
           transition={{ duration: 2, repeat: Infinity }}
         >
-          <motion.div 
-            className="h-2 w-2 rounded-full bg-orange-500"
-            animate={{ scale: [1, 1.5, 1] }}
-            transition={{ duration: 1, repeat: Infinity }}
-          />
-          <span className="text-sm font-black tracking-tight">وصلي • طلب جديد</span>
+          <div className="flex items-center gap-2">
+            <img src="/logo.jpg" alt="وصلي" className="h-5 w-5 rounded-full object-contain bg-white p-0.5" />
+            <span className="text-sm font-black tracking-tight">وصلي • طلب جديد</span>
+          </div>
         </motion.div>
 
         {/* Step Indicator */}
