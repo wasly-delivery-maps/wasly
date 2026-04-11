@@ -12,66 +12,6 @@
  *   onMapReady={(map) => {
  *     mapRef.current = map; // Store to control map from parent anytime, google map itself is in charge of the re-rendering, not react state.
  * </MapView>
- *
- * ======
- * Available Libraries and Core Features:
- * -------------------------------
- * 📍 MARKER (from `marker` library)
- * - Attaches to map using { map, position }
- * new google.maps.marker.AdvancedMarkerElement({
- *   map,
- *   position: { lat: 37.7749, lng: -122.4194 },
- *   title: "San Francisco",
- * });
- *
- * -------------------------------
- * 🏢 PLACES (from `places` library)
- * - Does not attach directly to map; use data with your map manually.
- * const place = new google.maps.places.Place({ id: PLACE_ID });
- * await place.fetchFields({ fields: ["displayName", "location"] });
- * map.setCenter(place.location);
- * new google.maps.marker.AdvancedMarkerElement({ map, position: place.location });
- *
- * -------------------------------
- * 🧭 GEOCODER (from `geocoding` library)
- * - Standalone service; manually apply results to map.
- * const geocoder = new google.maps.Geocoder();
- * geocoder.geocode({ address: "New York" }, (results, status) => {
- *   if (status === "OK" && results[0]) {
- *     map.setCenter(results[0].geometry.location);
- *     new google.maps.marker.AdvancedMarkerElement({
- *       map,
- *       position: results[0].geometry.location,
- *     });
- *   }
- * });
- *
- * -------------------------------
- * 📐 GEOMETRY (from `geometry` library)
- * - Pure utility functions; not attached to map.
- * const dist = google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
- *
- * -------------------------------
- * 🛣️ ROUTES (from `routes` library)
- * - Combines DirectionsService (standalone) + DirectionsRenderer (map-attached)
- * const directionsService = new google.maps.DirectionsService();
- * const directionsRenderer = new google.maps.DirectionsRenderer({ map });
- * directionsService.route(
- *   { origin, destination, travelMode: "DRIVING" },
- *   (res, status) => status === "OK" && directionsRenderer.setDirections(res)
- * );
- *
- * -------------------------------
- * 🌦️ MAP LAYERS (attach directly to map)
- * - new google.maps.TrafficLayer().setMap(map);
- * - new google.maps.TransitLayer().setMap(map);
- * - new google.maps.BicyclingLayer().setMap(map);
- *
- * -------------------------------
- * ✅ SUMMARY
- * - “map-attached” → AdvancedMarkerElement, DirectionsRenderer, Layers.
- * - “standalone” → Geocoder, DirectionsService, DistanceMatrixService, ElevationService.
- * - “data-only” → Place, Geometry utilities.
  */
 
 /// <reference types="@types/google.maps" />
@@ -99,7 +39,7 @@ function loadMapScript() {
     const baseUrl = isProxy 
       ? `${import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev"}/v1/maps/proxy/maps/api/js`
       : "https://maps.googleapis.com/maps/api/js";
-    // استخدام v=quarterly لضمان الاستقرار وإضافة جميع المكتبات اللازمة
+    
     script.src = `${baseUrl}?key=${API_KEY}&v=quarterly&libraries=marker,places,geocoding,geometry,routes`;
     script.async = true;
     script.crossOrigin = "anonymous";
@@ -136,21 +76,52 @@ export function MapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
 
+  // كود لإخفاء رسائل الخطأ الخاصة بجوجل مابس
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      /* إخفاء نافذة الخطأ المنبثقة من جوجل */
+      .gm-err-container {
+        display: none !important;
+      }
+      /* إخفاء تراكب "For development purposes only" */
+      .gm-style > div:first-child > div:nth-child(2) {
+        display: none !important;
+      }
+      .gm-style-cc {
+        display: none !important;
+      }
+      /* إخفاء زر "OK" في رسالة الخطأ */
+      .dismissButton {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // محاولة إغلاق أي نافذة منبثقة تظهر تلقائياً
+    const interval = setInterval(() => {
+      const dismissButtons = document.querySelectorAll('.dismissButton');
+      dismissButtons.forEach((btn: any) => btn.click());
+    }, 1000);
+
+    return () => {
+      document.head.removeChild(style);
+      clearInterval(interval);
+    };
+  }, []);
+
   const init = usePersistFn(async () => {
     await loadMapScript();
-    if (!mapContainer.current) {
-      console.error("Map container not found");
-      return;
-    }
+    if (!mapContainer.current) return;
     
     if (!map.current && window.google && window.google.maps) {
       map.current = new window.google.maps.Map(mapContainer.current, {
         zoom: initialZoom,
         center: initialCenter,
-        mapTypeControl: true,
-        fullscreenControl: true,
+        mapTypeControl: false,
+        fullscreenControl: false,
         zoomControl: true,
-        streetViewControl: true,
+        streetViewControl: false,
         mapId: "DEMO_MAP_ID",
       });
       if (onMapReady) {
@@ -164,6 +135,6 @@ export function MapView({
   }, [init]);
 
   return (
-    <div ref={mapContainer} className={cn("w-full h-[500px] rounded-lg overflow-hidden border border-border", className)} />
+    <div ref={mapContainer} className={cn("w-full h-[500px] rounded-lg overflow-hidden border border-border relative", className)} />
   );
 }
