@@ -54,7 +54,7 @@ export default function MapPicker({
     try {
       // البحث المركز على مصر (الإحداثيات: 26.8206° N, 30.8025° E)
       const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lon=31.3&lat=30.1&limit=5&lang=ar`
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lon=31.2357&lat=30.0444&limit=5&lang=ar`
       );
 
       if (!response.ok) throw new Error("فشل البحث");
@@ -134,7 +134,7 @@ export default function MapPicker({
     try {
       // البحث عبر Photon API
       const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchValue)}&lon=31.3&lat=30.1&limit=1&lang=ar`
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchValue)}&lon=31.2357&lat=30.0444&limit=1&lang=ar`
       );
 
       if (!response.ok) throw new Error("فشل البحث");
@@ -165,8 +165,8 @@ export default function MapPicker({
     mapRef.current = map;
     console.log("[Map] تم تحميل الخريطة بنجاح");
 
-    // تحديث مركز الخريطة إلى الحي الأول بالعبور
-    map.setCenter({ lat: 30.1136, lng: 31.3925 });
+    // تحديث مركز الخريطة إلى القاهرة
+    map.setCenter({ lat: 30.0444, lng: 31.2357 });
     map.setZoom(15);
 
     // إزالة listener القديم إن وجد
@@ -220,8 +220,8 @@ export default function MapPicker({
       </div>
 
       <MapView
-        initialCenter={{ lat: 30.1145, lng: 31.3850 }}
-        initialZoom={16}
+        initialCenter={{ lat: 30.0444, lng: 31.2357 }}
+        initialZoom={13}
         onMapReady={handleMapReady}
         className="h-[400px] rounded-lg border border-border"
       />
