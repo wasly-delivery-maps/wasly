@@ -136,6 +136,57 @@ export function MapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
 
+  // إخفاء نافذة خطأ جوجل مابس المنبثقة برمجياً
+  useEffect(() => {
+    // إضافة CSS لإخفاء النوافذ المنبثقة
+    const style = document.createElement('style');
+    style.innerHTML = `
+      /* إخفاء نافذة الخطأ من جوجل */
+      [role="dialog"] {
+        display: none !important;
+      }
+      .gm-err-container {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // محاولة إغلاق أي نافذة منبثقة تظهر
+    const closeErrorDialog = () => {
+      // البحث عن أي نوافذ حوار (dialog) وإغلاقها
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      dialogs.forEach((dialog: any) => {
+        dialog.style.display = 'none';
+        dialog.style.visibility = 'hidden';
+      });
+
+      // البحث عن أزرار "حسناً" أو "OK" والضغط عليها تلقائياً
+      const buttons = document.querySelectorAll('button');
+      buttons.forEach((btn: any) => {
+        if (btn.textContent?.includes('حسناً') || btn.textContent?.includes('OK')) {
+          try {
+            btn.click();
+          } catch (e) {}
+        }
+      });
+    };
+
+    // تشغيل الدالة عند ظهور أي عنصر جديد
+    const observer = new MutationObserver(closeErrorDialog);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    // محاولة إغلاق أي نافذة موجودة بالفعل
+    closeErrorDialog();
+
+    return () => {
+      observer.disconnect();
+      document.head.removeChild(style);
+    };
+  }, []);
+
   const init = usePersistFn(async () => {
     await loadMapScript();
     if (!mapContainer.current) {
