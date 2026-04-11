@@ -329,7 +329,7 @@ export default function CreateOrder() {
                       whileTap={{ scale: 0.95 }}
                     >
                       <Button 
-                        disabled={!pickupLocation}
+                        disabled={!pickupLocation || !pickupLocation.latitude}
                         onClick={() => setStep('delivery')}
                         className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white h-14 rounded-2xl text-base font-black shadow-lg hover:shadow-xl transition-all"
                       >
@@ -391,7 +391,7 @@ export default function CreateOrder() {
                       whileTap={{ scale: 0.95 }}
                     >
                       <Button 
-                        disabled={!deliveryLocation}
+                        disabled={!deliveryLocation || !deliveryLocation.latitude}
                         onClick={() => setStep('confirm')}
                         className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white h-14 rounded-2xl text-base font-black shadow-lg hover:shadow-xl transition-all"
                       >
