@@ -251,8 +251,8 @@ export default function CustomerDashboard() {
                       <stat.icon className="h-6 w-6" />
                     </motion.div>
                     <div>
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{stat.label}</div>
                       <div className="text-2xl font-black text-slate-900">{stat.value}</div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{stat.label}</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -261,34 +261,22 @@ export default function CustomerDashboard() {
           </motion.div>
 
           {/* Orders Tabs */}
-          <motion.div
-            variants={itemVariants}
-          >
+          <motion.div variants={itemVariants}>
             <Tabs defaultValue="active" className="w-full">
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <TabsList className="bg-gradient-to-r from-slate-100 to-slate-50 p-1 rounded-xl mb-6 shadow-sm">
-                  <TabsTrigger 
-                    value="active" 
-                    className="rounded-lg px-6 font-bold data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-md transition-all"
-                  >
-                    النشطة ({activeOrders.length})
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="completed" 
-                    className="rounded-lg px-6 font-bold data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-md transition-all"
-                  >
-                    المكتملة ({completedOrders.length})
-                  </TabsTrigger>
-                </TabsList>
-              </motion.div>
+              <TabsList className="bg-slate-100/50 p-1 rounded-2xl mb-8 w-full sm:w-auto">
+                <TabsTrigger value="active" className="rounded-xl px-8 py-3 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-orange-600 transition-all">
+                  الطلبات النشطة
+                  <Badge className="mr-2 bg-orange-100 text-orange-600 border-none">{activeOrders.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="rounded-xl px-8 py-3 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-600 transition-all">
+                  السجل
+                </TabsTrigger>
+              </TabsList>
 
               <TabsContent value="active">
-                <AnimatePresence>
+                <AnimatePresence mode="popLayout">
                   <motion.div 
-                    className="space-y-4"
+                    className="grid grid-cols-1 gap-6"
                     variants={containerVariants}
                     initial="hidden"
                     animate="visible"
@@ -305,7 +293,14 @@ export default function CustomerDashboard() {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: idx * 0.1 }}
                           >
-                            <Card className="border-none shadow-md bg-white rounded-2xl overflow-hidden hover:shadow-xl transition-all">
+                            <Card className={`hover:shadow-xl transition-all border-l-4 rounded-2xl overflow-hidden ${
+                              order.status === 'pending' ? 'border-amber-500 bg-gradient-to-br from-amber-50 to-white' :
+                              order.status === 'assigned' ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-white' :
+                              order.status === 'accepted' ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-white' :
+                              order.status === 'in_transit' ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-white' :
+                              order.status === 'arrived' ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-white' :
+                              'border-slate-300 bg-white'
+                            }`}>
                               <CardContent className="p-6">
                                 <div className="flex flex-col md:flex-row justify-between gap-6">
                                   <div className="flex-1 space-y-4">
@@ -314,7 +309,7 @@ export default function CustomerDashboard() {
                                       <motion.div
                                         whileHover={{ scale: 1.1 }}
                                       >
-                                        <Badge className={`${status.color} border-none font-bold px-3 py-1 rounded-full text-[10px]`}>
+                                        <Badge className={`${status.color} border-none font-bold px-3 py-1 rounded-full text-[10px] shadow-sm`}>
                                           {status.label}
                                         </Badge>
                                       </motion.div>
@@ -336,7 +331,7 @@ export default function CustomerDashboard() {
                                   </div>
                                   <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-4 border-t md:border-t-0 pt-4 md:pt-0">
                                     <motion.div 
-                                      className="text-2xl font-black bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent"
+                                      className="text-2xl font-black text-slate-900"
                                       animate={{ scale: [1, 1.05, 1] }}
                                       transition={{ duration: 2, repeat: Infinity }}
                                     >
@@ -433,20 +428,24 @@ export default function CustomerDashboard() {
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: idx * 0.1 }}
                           >
-                            <Card className="border-none shadow-md bg-white rounded-2xl hover:shadow-lg transition-all">
+                            <Card className={`hover:shadow-lg transition-all border-l-4 rounded-2xl overflow-hidden ${
+                              order.status === 'delivered' ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-white' :
+                              order.status === 'cancelled' ? 'border-rose-500 bg-gradient-to-br from-rose-50 to-white' :
+                              'border-slate-300 bg-white'
+                            }`}>
                               <CardContent className="p-6">
                                 <div className="flex justify-between items-start mb-4">
                                   <div>
-                                    <p className="text-xs font-bold text-slate-400 mb-1">الطلب #{order.id}</p>
+                                    <p className="text-xs font-bold text-slate-500 mb-1">الطلب #{order.id}</p>
                                     <motion.div
                                       whileHover={{ scale: 1.1 }}
                                     >
-                                      <Badge className={`${status.color} border-none font-bold px-2 py-0.5 rounded-full text-[9px]`}>
+                                      <Badge className={`${status.color} border-none font-bold px-3 py-1 rounded-full text-[10px] shadow-sm`}>
                                         {status.label}
                                       </Badge>
                                     </motion.div>
                                   </div>
-                                  <div className="text-xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">ج.م {order.price}</div>
+                                  <div className="text-2xl font-black text-slate-900">ج.م {order.price}</div>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-4">
                                   <Calendar className="h-3.5 w-3.5" />
@@ -548,68 +547,71 @@ export default function CustomerDashboard() {
                   <div className="absolute right-[19px] top-8 bottom-8 w-0.5 bg-dashed border-r-2 border-slate-100 border-dashed" />
                   
                   <div className="flex items-start gap-4 relative z-10">
-                    <div className="h-10 w-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-orange-100">
-                      <MapPin className="h-5 w-5" />
+                    <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 border-4 border-white shadow-sm">
+                      <div className="h-2 w-2 rounded-full bg-orange-600 animate-pulse" />
                     </div>
-                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                      <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">نقطة الاستلام</p>
-                      <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.pickupLocation.address}</p>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">موقع الاستلام</p>
+                      <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.pickupLocation?.address}</p>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-4 relative z-10">
-                    <div className="h-10 w-10 rounded-xl bg-blue-500 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-blue-100">
-                      <Navigation className="h-5 w-5" />
+                    <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 border-4 border-white shadow-sm">
+                      <MapPin className="h-4 w-4 text-blue-600" />
                     </div>
-                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">وجهة التسليم</p>
-                      <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.deliveryLocation.address}</p>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">وجهة التسليم</p>
+                      <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.deliveryLocation?.address}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Additional Info */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Zap className="h-3.5 w-3.5 text-slate-400" />
-                      <span className="text-[10px] font-black text-slate-400 uppercase">المسافة</span>
+                {/* Driver Info if assigned */}
+                {orderDetailsQuery.data.assignedDriver && (
+                  <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center text-white text-xl font-black shadow-md">
+                          {orderDetailsQuery.data.assignedDriver.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">السائق المكلف</p>
+                          <p className="text-base font-black text-slate-900">{orderDetailsQuery.data.assignedDriver.name}</p>
+                        </div>
+                      </div>
+                      <motion.a 
+                        href={`tel:${orderDetailsQuery.data.assignedDriver.phone}`}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        className="h-12 w-12 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm border border-orange-100 hover:bg-orange-50 transition-all"
+                      >
+                        <Phone className="h-6 w-6" />
+                      </motion.a>
                     </div>
-                    <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.distance.toFixed(1)} كم</p>
                   </div>
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Clock className="h-3.5 w-3.5 text-slate-400" />
-                      <span className="text-[10px] font-black text-slate-400 uppercase">الوقت المتوقع</span>
-                    </div>
-                    <p className="text-sm font-bold text-slate-700">{orderDetailsQuery.data.estimatedTime} دقيقة</p>
-                  </div>
-                </div>
+                )}
 
                 {/* Notes */}
                 {orderDetailsQuery.data.notes && (
-                  <div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Info className="h-4 w-4 text-orange-500" />
-                      <span className="text-xs font-black text-orange-600">ملاحظات الطلب</span>
-                    </div>
-                    <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                      {orderDetailsQuery.data.notes}
-                    </p>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ملاحظات الطلب</p>
+                    <p className="text-sm font-medium text-slate-600 italic">"{orderDetailsQuery.data.notes}"</p>
                   </div>
                 )}
               </>
             ) : (
-              <div className="py-10 text-center">
-                <p className="text-rose-500 font-bold">فشل في تحميل تفاصيل الطلب</p>
+              <div className="py-20 text-center">
+                <Info className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+                <p className="text-slate-400 font-bold">لم يتم العثور على تفاصيل</p>
               </div>
             )}
           </div>
 
           <DialogFooter className="p-6 bg-slate-50 border-t border-slate-100">
             <Button 
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black h-12 rounded-xl shadow-lg transition-all"
               onClick={() => setIsDetailsOpen(false)}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black h-12 rounded-xl transition-all"
             >
               إغلاق النافذة
             </Button>
