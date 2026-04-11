@@ -17,18 +17,6 @@ interface MapPickerProps {
   title?: string;
 }
 
-interface PhotonResult {
-  properties: {
-    name: string;
-    address?: string;
-    city?: string;
-    country?: string;
-  };
-  geometry: {
-    coordinates: [number, number];
-  };
-}
-
 export default function MapPicker({
   onLocationSelect,
   title = "اضغط على الخريطة لاختيار الموقع",
@@ -36,47 +24,12 @@ export default function MapPicker({
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const listenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [suggestions, setSuggestions] = useState<PhotonResult[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
-
-  // البحث عبر Photon API (Maps.me)
-  const searchPhoton = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-
-    try {
-      // البحث المركز على مصر (الإحداثيات: 26.8206° N, 30.8025° E)
-      const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lon=31.2357&lat=30.0444&limit=5&lang=ar`
-      );
-
-      if (!response.ok) throw new Error("فشل البحث");
-
-      const data = await response.json();
-      setSuggestions(data.features || []);
-      setShowSuggestions(true);
-    } catch (error) {
-      console.error("[Photon] خطأ في البحث:", error);
-      setSuggestions([]);
-    }
-  }, []);
-
-  // معالجة تغيير النص في خانة البحث
-  const handleSearchInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setSearchValue(value);
-      searchPhoton(value);
-    },
-    [searchPhoton]
-  );
 
   // تحديث الخريطة والموقع
   const updateMapLocation = useCallback(
@@ -107,8 +60,6 @@ export default function MapPicker({
 
       // تحديث حالة البحث
       setSearchValue(address);
-      setSuggestions([]);
-      setShowSuggestions(false);
 
       // استدعاء callback
       const locationData: LocationData = {
@@ -122,51 +73,13 @@ export default function MapPicker({
     [onLocationSelect]
   );
 
-  // البحث اليدوي
-  const handleSearch = useCallback(async () => {
-    if (!searchValue.trim() || !mapRef.current) {
-      toast.error("يرجى كتابة عنوان للبحث");
-      return;
-    }
-
-    setIsSearching(true);
-
-    try {
-      // البحث عبر Photon API
-      const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchValue)}&lon=31.2357&lat=30.0444&limit=1&lang=ar`
-      );
-
-      if (!response.ok) throw new Error("فشل البحث");
-
-      const data = await response.json();
-      const results = data.features || [];
-
-      if (results.length === 0) {
-        toast.error("لم يتم العثور على الموقع");
-        setIsSearching(false);
-        return;
-      }
-
-      const result = results[0];
-      const [lng, lat] = result.geometry.coordinates;
-      const address = result.properties.name || "موقع محدد";
-
-      updateMapLocation(lat, lng, address);
-    } catch (error) {
-      console.error("[Search] خطأ في البحث:", error);
-      toast.error("فشل البحث عن الموقع");
-    } finally {
-      setIsSearching(false);
-    }
-  }, [searchValue, updateMapLocation]);
-
   const handleMapReady = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
     console.log("[Map] تم تحميل الخريطة بنجاح");
 
-    // تحديث مركز الخريطة إلى القاهرة
-    map.setCenter({ lat: 30.0444, lng: 31.2357 });
+    // تحديث مركز الخريطة إلى الحي الأول بالعبور
+    const obourFirstDistrictCenter = { lat: 30.1136, lng: 31.3925 };
+    map.setCenter(obourFirstDistrictCenter);
     map.setZoom(15);
 
     // إزالة listener القديم إن وجد
@@ -200,18 +113,132 @@ export default function MapPicker({
         updateMapLocation(lat, lng, address);
       });
     });
+
+    // تهيئة Google Places Autocomplete
+    if (searchInputRef.current && !autocompleteRef.current) {
+      try {
+        autocompleteRef.current = new google.maps.places.Autocomplete(
+          searchInputRef.current,
+          {
+            // تقييد البحث على مصر والعبور
+            componentRestrictions: { country: "eg" },
+            // أنواع النتائج: عناوين، أماكن، محلات
+            types: ["geocode", "establishment"],
+            // الحقول المطلوبة من النتيجة
+            fields: ["geometry", "formatted_address", "name", "place_id"],
+            // تحديد منطقة البحث الأساسية (الحي الأول بالعبور)
+            bounds: new google.maps.LatLngBounds(
+              new google.maps.LatLng(30.0, 31.2), // Southwest
+              new google.maps.LatLng(30.2, 31.5)   // Northeast
+            ),
+            strictBounds: false, // السماح بنتائج خارج الحدود إذا لم توجد نتائج داخلها
+          }
+        );
+
+        console.log("[Autocomplete] تم تهيئة Autocomplete بنجاح");
+
+        // عند اختيار مكان من الاقتراحات
+        autocompleteRef.current.addListener("place_changed", () => {
+          const place = autocompleteRef.current?.getPlace();
+          
+          if (!place) {
+            console.warn("[Autocomplete] لم يتم الحصول على بيانات الموقع");
+            toast.error("لم يتم العثور على الموقع");
+            return;
+          }
+
+          if (!place.geometry || !place.geometry.location) {
+            console.warn("[Autocomplete] لا توجد إحداثيات للموقع");
+            toast.error("لم يتم العثور على إحداثيات الموقع");
+            return;
+          }
+
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+          const address = place.formatted_address || place.name || "موقع محدد";
+
+          console.log("[Autocomplete] تم اختيار موقع:", { lat, lng, address });
+
+          updateMapLocation(lat, lng, address);
+        });
+      } catch (error) {
+        console.error("[Autocomplete] خطأ في إعداد Autocomplete:", error);
+        toast.error("فشل في تحميل محرك البحث");
+      }
+    }
   }, [updateMapLocation]);
 
-  // معالجة اختيار اقتراح
-  const handleSelectSuggestion = useCallback(
-    (result: PhotonResult) => {
-      const [lng, lat] = result.geometry.coordinates;
-      const address = result.properties.name || "موقع محدد";
+  // معالجة البحث اليدوي (عند الضغط على زر البحث)
+  const handleSearch = useCallback(async () => {
+    if (!searchValue.trim() || !mapRef.current) {
+      toast.error("يرجى كتابة عنوان للبحث");
+      return;
+    }
+
+    setIsSearching(true);
+
+    try {
+      // استخدام Google Geocoder للبحث المباشر
+      if (!geocoderRef.current) {
+        geocoderRef.current = new google.maps.Geocoder();
+      }
+
+      const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+        geocoderRef.current?.geocode(
+          { 
+            address: searchValue,
+            // تحديد المنطقة الجغرافية (مصر)
+            componentRestrictions: { country: "EG" }
+          },
+          (results, status) => {
+            console.log("[Geocoder] حالة البحث:", status, "عدد النتائج:", results?.length);
+            
+            if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
+              resolve(results);
+            } else {
+              const errorMsg = status === google.maps.GeocoderStatus.ZERO_RESULTS 
+                ? "لم يتم العثور على الموقع" 
+                : `خطأ في البحث: ${status}`;
+              reject(new Error(errorMsg));
+            }
+          }
+        );
+      });
+
+      if (results.length === 0) {
+        toast.error("لم يتم العثور على الموقع");
+        setIsSearching(false);
+        return;
+      }
+
+      const location = results[0];
+      const lat = location.geometry.location.lat();
+      const lng = location.geometry.location.lng();
+      const address = location.formatted_address;
+
+      console.log("[Search] الموقع المختار:", { lat, lng, address });
 
       updateMapLocation(lat, lng, address);
-    },
-    [updateMapLocation]
-  );
+    } catch (error) {
+      console.error("[Search] خطأ في البحث:", error);
+      const errorMessage = error instanceof Error ? error.message : "فشل البحث عن الموقع";
+      toast.error(errorMessage);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchValue, updateMapLocation]);
+
+  // تنظيف عند فك المكون
+  useEffect(() => {
+    return () => {
+      if (listenerRef.current) {
+        google.maps.event.removeListener(listenerRef.current);
+      }
+      if (markerRef.current) {
+        markerRef.current.map = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -220,67 +247,42 @@ export default function MapPicker({
       </div>
 
       <MapView
-        initialCenter={{ lat: 30.0444, lng: 31.2357 }}
-        initialZoom={13}
+        initialCenter={{ lat: 30.1136, lng: 31.3925 }} // الحي الأول بالعبور
+        initialZoom={15}
         onMapReady={handleMapReady}
         className="h-[400px] rounded-lg border border-border"
       />
 
       <div className="space-y-3">
-        <div className="relative">
-          <div className="flex gap-2">
-            <Input
-              ref={searchInputRef}
-              type="text"
-              placeholder="ابحث عن عنوان أو مكان..."
-              value={searchValue}
-              onChange={handleSearchInputChange}
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  handleSearch();
-                }
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              className="w-full text-right"
-              dir="rtl"
+        <div className="flex gap-2">
+          <Input
+            ref={searchInputRef}
+            type="text"
+            placeholder="ابحث عن عنوان أو مكان..."
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") {
+                handleSearch();
+              }
+            }}
+            className="w-full text-right"
+            dir="rtl"
+            disabled={isSearching}
+          />
+          {searchValue.trim() && (
+            <Button
+              onClick={handleSearch}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4"
+              size="sm"
               disabled={isSearching}
-            />
-            {searchValue.trim() && (
-              <Button
-                onClick={handleSearch}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-4"
-                size="sm"
-                disabled={isSearching}
-              >
-                <Search className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-
-          {/* قائمة الاقتراحات */}
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
-              {suggestions.map((result, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSelectSuggestion(result)}
-                  className="w-full text-right px-4 py-3 hover:bg-orange-50 border-b last:border-b-0 transition-colors"
-                >
-                  <div className="font-semibold text-sm text-gray-900">
-                    {result.properties.name}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {result.properties.city && `${result.properties.city}, `}
-                    {result.properties.address}
-                  </div>
-                </button>
-              ))}
-            </div>
+            >
+              <Search className="w-4 h-4" />
+            </Button>
           )}
         </div>
-
         <p className="text-xs text-gray-500 text-right px-1">
-          🔍 البحث يعتمد على بيانات Maps.me (مجاني وموثوق)
+          💡 اكتب اسم المكان أو العنوان وسيظهر لك الاقتراحات تلقائياً
         </p>
       </div>
     </div>
