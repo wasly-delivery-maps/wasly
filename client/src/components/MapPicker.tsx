@@ -50,8 +50,9 @@ export default function MapPicker({
 
   // البحث عبر Photon API (Maps.me) مع تركيز على العبور والقاهرة
   const searchPhoton = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 1) {
+    if (!query.trim() || query.length < 2) {
       setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
@@ -66,20 +67,26 @@ export default function MapPicker({
       const data = await response.json();
       const results = data.features || [];
       
-      // ترتيب النتائج: الأقرب للعبور أولاً
-      const sorted = results.sort((a: PhotonResult, b: PhotonResult) => {
-        const distA = Math.abs(a.geometry.coordinates[0] - OBOUR_CENTER.lng) + 
-                      Math.abs(a.geometry.coordinates[1] - OBOUR_CENTER.lat);
-        const distB = Math.abs(b.geometry.coordinates[0] - OBOUR_CENTER.lng) + 
-                      Math.abs(b.geometry.coordinates[1] - OBOUR_CENTER.lat);
-        return distA - distB;
-      });
+      if (results.length > 0) {
+        // ترتيب النتائج: الأقرب للعبور أولاً
+        const sorted = results.sort((a: PhotonResult, b: PhotonResult) => {
+          const distA = Math.abs(a.geometry.coordinates[0] - OBOUR_CENTER.lng) + 
+                        Math.abs(a.geometry.coordinates[1] - OBOUR_CENTER.lat);
+          const distB = Math.abs(b.geometry.coordinates[0] - OBOUR_CENTER.lng) + 
+                        Math.abs(b.geometry.coordinates[1] - OBOUR_CENTER.lat);
+          return distA - distB;
+        });
 
-      setSuggestions(sorted.slice(0, 8)); // عرض أول 8 نتائج
-      setShowSuggestions(true);
+        setSuggestions(sorted.slice(0, 8)); // عرض أول 8 نتائج
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
     } catch (error) {
       console.error("[Photon] خطأ في البحث:", error);
       setSuggestions([]);
+      setShowSuggestions(false);
     }
   }, []);
 
@@ -145,7 +152,7 @@ export default function MapPicker({
 
   // البحث اليدوي
   const handleSearch = useCallback(async () => {
-    if (!searchValue.trim() || !mapRef.current) {
+    if (!searchValue.trim()) {
       toast.error("يرجى كتابة عنوان للبحث");
       return;
     }
@@ -155,7 +162,7 @@ export default function MapPicker({
     try {
       // البحث عبر Photon API
       const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchValue)}&lon=${OBOUR_CENTER.lng}&lat=${OBOUR_CENTER.lat}&limit=1&lang=ar`
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchValue)}&lon=${OBOUR_CENTER.lng}&lat=${OBOUR_CENTER.lat}&limit=5&lang=ar`
       );
 
       if (!response.ok) throw new Error("فشل البحث");
@@ -169,11 +176,13 @@ export default function MapPicker({
         return;
       }
 
+      // اختيار أول نتيجة (الأقرب للعبور)
       const result = results[0];
       const [lng, lat] = result.geometry.coordinates;
-      const address = result.properties.name || "موقع محدد";
+      const address = result.properties.name || searchValue;
 
       updateMapLocation(lat, lng, address);
+      setShowSuggestions(false);
     } catch (error) {
       console.error("[Search] خطأ في البحث:", error);
       toast.error("فشل البحث عن الموقع");
