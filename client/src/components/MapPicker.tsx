@@ -182,6 +182,7 @@ export default function MapPicker({
       const address = result.properties.name || searchValue;
 
       updateMapLocation(lat, lng, address);
+      setSuggestions([]);
       setShowSuggestions(false);
     } catch (error) {
       console.error("[Search] خطأ في البحث:", error);
