@@ -37,41 +37,28 @@ export default function MapPicker({
     }
 
     try {
-      // تحسين البحث المجاني (Nominatim) ليكون أكثر مرونة ودقة
-      // نقوم بإضافة "العبور، مصر" تلقائياً إذا لم تكن موجودة لزيادة دقة البحث المحلي
+      // استخدام Photon API (المرتبطة ببيانات Maps.me/OpenStreetMap) للبحث
+      // Photon تتميز بسرعة البحث ودعمها لبيانات الخرائط المفتوحة التي يستخدمها Maps.me
       let query = searchValue;
-      if (!query.toLowerCase().includes("العبور") && !query.toLowerCase().includes("obour")) {
-        query += " العبور، مصر";
+      if (!query.toLowerCase().includes("مصر") && !query.toLowerCase().includes("egypt")) {
+        query += " مصر";
       }
 
+      // تحديد نطاق البحث حول مصر لزيادة الدقة
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          query
-        )}&addressdetails=1&limit=5`,
-        {
-          headers: {
-            'Accept-Language': 'ar,en',
-            'User-Agent': 'WaslyDeliveryApp/1.0'
-          }
-        }
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=ar`
       );
 
-      let results = await response.json();
+      const data = await response.json();
+      let results = data.features;
 
-      // إذا فشل البحث الأول، نحاول البحث بالاسم الأصلي فقط بدون إضافات
       if (!results || results.length === 0) {
+        // محاولة ثانية بدون إضافات إذا فشل البحث الأول
         const fallbackResponse = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            searchValue
-          )}&addressdetails=1&limit=5`,
-          {
-            headers: {
-              'Accept-Language': 'ar,en',
-              'User-Agent': 'WaslyDeliveryApp/1.0'
-            }
-          }
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchValue)}&limit=5&lang=ar`
         );
-        results = await fallbackResponse.json();
+        const fallbackData = await fallbackResponse.json();
+        results = fallbackData.features;
       }
 
       if (!results || results.length === 0) {
@@ -79,21 +66,23 @@ export default function MapPicker({
         return;
       }
 
-      // اختيار النتيجة الأكثر صلة (نفضل النتائج في مصر والعبور)
-      const location = results.find((r: any) => 
-        r.display_name.includes("Egypt") || r.display_name.includes("مصر")
-      ) || results[0];
-
-      const lat = parseFloat(location.lat);
-      const lng = parseFloat(location.lon);
+      // اختيار النتيجة الأكثر صلة
+      const bestMatch = results[0];
+      const [lng, lat] = bestMatch.geometry.coordinates;
       
-      // تنظيف العنوان ليظهر بشكل أجمل (نأخذ أول جزئين من العنوان الطويل)
-      const addressParts = location.display_name.split(',');
-      const address = addressParts.length > 2 
-        ? `${addressParts[0].trim()}, ${addressParts[1].trim()}` 
-        : location.display_name;
+      // بناء العنوان من خصائص النتيجة
+      const props = bestMatch.properties;
+      const addressParts = [
+        props.name,
+        props.street,
+        props.district,
+        props.city,
+        props.state
+      ].filter(Boolean);
+      
+      const address = addressParts.length > 0 ? addressParts.join(", ") : searchValue;
 
-      // تحديث خريطة جوجل بناءً على نتائج البحث المجانية
+      // تحديث خريطة جوجل بناءً على نتائج البحث
       if (mapRef.current) {
         mapRef.current.setCenter({ lat, lng });
         mapRef.current.setZoom(17);
@@ -126,7 +115,7 @@ export default function MapPicker({
       onLocationSelect(locationData);
       toast.success("تم العثور على الموقع بنجاح");
     } catch (error) {
-      console.error("Search error (Nominatim):", error);
+      console.error("Search error (Photon/Maps.me):", error);
       toast.error("فشل البحث عن الموقع. يرجى المحاولة مرة أخرى.");
     }
   }, [searchValue, onLocationSelect, mapRef]);
@@ -140,7 +129,7 @@ export default function MapPicker({
 
   const handleMapReady = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
-    // تحديث مركز الخريطة إلى الحي الأول بالعبور
+    // تحديث مركز الخريطة إلى الحي الأول بالعبور كمركز افتراضي للتطبيق في مصر
     map.setCenter({ lat: 30.1136, lng: 31.3925 });
     map.setZoom(15);
   }, []);
@@ -190,7 +179,6 @@ export default function MapPicker({
         if (status === "OK" && results && results[0]) {
           location.address = results[0].formatted_address;
         }
-        console.log("[MapPicker] Location selected:", location);
         onLocationSelect({ ...location });
         toast.success("تم اختيار الموقع بنجاح");
       });
@@ -203,7 +191,7 @@ export default function MapPicker({
     };
   }, [onLocationSelect]);
 
-  // إعداد Google Places Autocomplete
+  // إعداد Google Places Autocomplete كخيار إضافي مدمج مع الخريطة
   useEffect(() => {
     if (!searchInputRef.current || !mapRef.current) return;
 
@@ -217,11 +205,9 @@ export default function MapPicker({
         }
       );
 
-      // عند اختيار مكان من الاقتراحات
       autocompleteRef.current.addListener("place_changed", () => {
         const place = autocompleteRef.current?.getPlace();
         if (!place || !place.geometry || !place.geometry.location) {
-          toast.error("لم يتم العثور على الموقع");
           return;
         }
 
@@ -229,16 +215,13 @@ export default function MapPicker({
         const lng = place.geometry.location.lng();
         const address = place.formatted_address || place.name || "موقع محدد";
 
-        // تحديث الخريطة
         mapRef.current?.setCenter({ lat, lng });
         mapRef.current?.setZoom(17);
 
-        // إزالة marker القديم
         if (markerRef.current) {
           markerRef.current.map = null;
         }
 
-        // إضافة marker جديد
         try {
           markerRef.current = new google.maps.marker.AdvancedMarkerElement({
             map: mapRef.current,
@@ -249,7 +232,6 @@ export default function MapPicker({
           console.error("خطأ في إضافة marker:", error);
         }
 
-        // استدعاء callback
         const location: LocationData = {
           address,
           latitude: lat,
@@ -269,7 +251,6 @@ export default function MapPicker({
     };
   }, [onLocationSelect]);
 
-  // تنظيف عند فك المكون
   useEffect(() => {
     return () => {
       if (listenerRef.current) {
@@ -288,7 +269,7 @@ export default function MapPicker({
       </div>
       
       <MapView
-        initialCenter={{ lat: 30.1145, lng: 31.3850 }} // Al-Obour First District (الحي الأول - العبور) coordinates
+        initialCenter={{ lat: 30.1145, lng: 31.3850 }}
         initialZoom={16}
         onMapReady={handleMapReady}
         className="h-[400px] rounded-lg border border-border"
@@ -299,7 +280,7 @@ export default function MapPicker({
           <Input
             ref={searchInputRef}
             type="text"
-            placeholder="ابحث عن عنوان، مكان، أو كود (مثل: 6FP9+CQV)..."
+            placeholder="ابحث عن عنوان أو مكان (قاعدة بيانات Maps.me)..."
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             onKeyPress={(e) => {
@@ -320,7 +301,7 @@ export default function MapPicker({
           </Button>
         </div>
         <p className="text-[10px] text-slate-400 text-right px-1">
-          يمكنك البحث باسم المحل، الشارع، أو نسخ كود الموقع من خرائط جوجل
+          البحث الآن مدعوم ببيانات خرائط مصر التفصيلية (Maps.me)
         </p>
       </div>
     </div>
