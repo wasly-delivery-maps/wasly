@@ -248,6 +248,13 @@ export default function MapPicker({
         <p className="text-sm text-blue-900">{title}</p>
       </div>
       
+      <MapView
+        initialCenter={{ lat: 30.1145, lng: 31.3850 }} // Al-Obour First District (الحي الأول - العبور) coordinates
+        initialZoom={16}
+        onMapReady={handleMapReady}
+        className="h-[400px] rounded-lg border border-border"
+      />
+      
       <div className="space-y-3">
         <div className="flex gap-2">
           <Input
@@ -275,13 +282,6 @@ export default function MapPicker({
           )}
         </div>
       </div>
-      
-      <MapView
-        initialCenter={{ lat: 30.1145, lng: 31.3850 }} // Al-Obour First District (الحي الأول - العبور) coordinates
-        initialZoom={16}
-        onMapReady={handleMapReady}
-        className="h-[400px] rounded-lg border border-border"
-      />
     </div>
   );
 }
