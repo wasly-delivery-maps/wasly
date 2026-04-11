@@ -30,71 +30,22 @@ export default function MapPicker({
 
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
-  const handleMapReady = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-    // مركز افتراضي (العبور، مصر)
-    map.setCenter({ lat: 30.1136, lng: 31.3925 });
-    map.setZoom(15);
-  }, []);
+  // دالة تحديث الموقع بناءً على المنطق المرجعي (AdvancedMarkerElement + setCenter)
+  const updateMapLocation = useCallback((lat: number, lng: number, address: string) => {
+    if (!mapRef.current) return;
 
-  // إعداد Google Places Autocomplete بكامل مميزاته
-  useEffect(() => {
-    if (!searchInputRef.current || !mapRef.current) return;
+    // 1. تحديث مركز الخريطة كما في الكود المرجعي (السطر 169)
+    mapRef.current.setCenter({ lat, lng });
+    mapRef.current.setZoom(17);
 
-    try {
-      // إعداد Autocomplete ليعمل كما في تطبيق خرائط جوجل
-      autocompleteRef.current = new google.maps.places.Autocomplete(
-        searchInputRef.current,
-        {
-          componentRestrictions: { country: "eg" }, // تحديد البحث لمصر لزيادة الدقة
-          types: ["geocode", "establishment"], // البحث عن العناوين والمحلات التجارية
-          fields: ["geometry", "formatted_address", "name", "place_id"],
-        }
-      );
-
-      // ربط البحث بنطاق الخريطة المعروضة لنتائج أدق
-      autocompleteRef.current.bindTo("bounds", mapRef.current);
-
-      // عند اختيار مكان من الاقتراحات
-      autocompleteRef.current.addListener("place_changed", () => {
-        const place = autocompleteRef.current?.getPlace();
-        
-        if (!place || !place.geometry || !place.geometry.location) {
-          // إذا لم يجد جوجل الموقع في الاقتراحات، نحاول البحث عنه يدوياً كـ Plus Code أو نص عادي
-          handleManualSearch(searchInputRef.current?.value || "");
-          return;
-        }
-
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        const address = place.formatted_address || place.name || "موقع محدد";
-
-        updateMapLocation(lat, lng, address);
-      });
-    } catch (error) {
-      console.error("خطأ في إعداد Autocomplete:", error);
-    }
-
-    return () => {
-      if (autocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
-    };
-  }, [onLocationSelect]);
-
-  // دالة لتحديث الموقع على الخريطة والماركر
-  const updateMapLocation = (lat: number, lng: number, address: string) => {
-    if (mapRef.current) {
-      mapRef.current.setCenter({ lat, lng });
-      mapRef.current.setZoom(17);
-    }
-
+    // 2. إزالة الماركر القديم
     if (markerRef.current) {
       markerRef.current.map = null;
     }
 
+    // 3. إضافة ماركر جديد باستخدام AdvancedMarkerElement كما في المرجع (الأسطر 126-130)
     try {
-      if (mapRef.current && window.google && window.google.maps) {
+      if (window.google && window.google.maps && window.google.maps.marker) {
         markerRef.current = new google.maps.marker.AdvancedMarkerElement({
           map: mapRef.current,
           position: { lat, lng },
@@ -105,12 +56,64 @@ export default function MapPicker({
       console.error("خطأ في إضافة marker:", error);
     }
 
+    // 4. تحديث حالة البحث واستدعاء الـ callback
     setSearchValue(address);
     onLocationSelect({ address, latitude: lat, longitude: lng });
-    toast.success("تم تحديد الموقع بنجاح");
-  };
+  }, [onLocationSelect]);
 
-  // دالة للبحث اليدوي (لدعم Plus Codes والنصوص المباشرة)
+  const handleMapReady = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+    // الموقع الافتراضي (العبور، مصر)
+    map.setCenter({ lat: 30.1136, lng: 31.3925 });
+    map.setZoom(15);
+  }, []);
+
+  // تفعيل Google Places Autocomplete بكامل مميزاته (كما في تطبيق جوجل ماب)
+  useEffect(() => {
+    if (!searchInputRef.current || !mapRef.current) return;
+
+    try {
+      autocompleteRef.current = new google.maps.places.Autocomplete(
+        searchInputRef.current,
+        {
+          componentRestrictions: { country: "eg" },
+          types: ["geocode", "establishment"],
+          fields: ["geometry", "formatted_address", "name"],
+        }
+      );
+
+      // ربط الاقتراحات بنطاق الخريطة لنتائج أدق
+      autocompleteRef.current.bindTo("bounds", mapRef.current);
+
+      autocompleteRef.current.addListener("place_changed", () => {
+        const place = autocompleteRef.current?.getPlace();
+        
+        if (!place || !place.geometry || !place.geometry.location) {
+          // محاولة البحث اليدوي إذا لم يتم اختيار اقتراح (لدعم Plus Codes)
+          const query = searchInputRef.current?.value || "";
+          if (query) handleManualSearch(query);
+          return;
+        }
+
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const address = place.formatted_address || place.name || "موقع محدد";
+
+        updateMapLocation(lat, lng, address);
+        toast.success("تم تحديد الموقع بنجاح");
+      });
+    } catch (error) {
+      console.error("Autocomplete error:", error);
+    }
+
+    return () => {
+      if (autocompleteRef.current) {
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      }
+    };
+  }, [updateMapLocation]);
+
+  // دالة البحث اليدوي لدعم Plus Codes والنصوص المباشرة
   const handleManualSearch = async (query: string) => {
     if (!query.trim()) return;
 
@@ -124,13 +127,14 @@ export default function MapPicker({
         const lng = results[0].geometry.location.lng();
         const address = results[0].formatted_address;
         updateMapLocation(lat, lng, address);
+        toast.success("تم العثور على الموقع");
       } else {
-        toast.error("لم يتم العثور على الموقع، يرجى كتابة العنوان بدقة أو استخدام Plus Code");
+        toast.error("لم يتم العثور على الموقع، يرجى التأكد من العنوان");
       }
     });
   };
 
-  // مستمع للضغط على الخريطة
+  // مستمع للضغط على الخريطة كما في الكود المرجعي (الأسطر 62-71)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -154,6 +158,7 @@ export default function MapPicker({
           : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
         
         updateMapLocation(lat, lng, address);
+        toast.success("تم اختيار الموقع");
       });
     });
 
@@ -162,7 +167,7 @@ export default function MapPicker({
         google.maps.event.removeListener(listenerRef.current);
       }
     };
-  }, [onLocationSelect]);
+  }, [updateMapLocation]);
 
   return (
     <div className="space-y-4">
@@ -184,7 +189,7 @@ export default function MapPicker({
           <Input
             ref={searchInputRef}
             type="text"
-            placeholder="ابحث عن مكان، محل، أو Plus Code (مثل: 6FP9+CQV)..."
+            placeholder="ابحث عن مكان، محل، أو Plus Code..."
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             onKeyPress={(e) => {
@@ -204,7 +209,7 @@ export default function MapPicker({
           </Button>
         </div>
         <p className="text-[11px] text-slate-500 text-right px-1 font-medium">
-          🔍 البحث مدعوم بكامل مميزات خرائط جوجل (الأماكن، المحلات، والأكواد المختصرة)
+          🔍 البحث مدعوم بكامل مميزات خرائط جوجل كما في تطبيقك الأصلي
         </p>
       </div>
     </div>
