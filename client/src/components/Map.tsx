@@ -69,9 +69,9 @@
  *
  * -------------------------------
  * ✅ SUMMARY
- * - "map-attached" → AdvancedMarkerElement, DirectionsRenderer, Layers.
- * - "standalone" → Geocoder, DirectionsService, DistanceMatrixService, ElevationService.
- * - "data-only" → Place, Geometry utilities.
+ * - “map-attached” → AdvancedMarkerElement, DirectionsRenderer, Layers.
+ * - “standalone” → Geocoder, DirectionsService, DistanceMatrixService, ElevationService.
+ * - “data-only” → Place, Geometry utilities.
  */
 
 /// <reference types="@types/google.maps" />
@@ -86,35 +86,24 @@ declare global {
   }
 }
 
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
+const API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
+const FORGE_BASE_URL =
+  import.meta.env.VITE_FRONTEND_FORGE_API_URL ||
+  "https://forge.butterfly-effect.dev";
+const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
 
 function loadMapScript() {
   return new Promise(resolve => {
-    if (window.google && window.google.maps) {
-      resolve(null);
-      return;
-    }
     const script = document.createElement("script");
-    const isProxy = !import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    const baseUrl = isProxy 
-      ? `${import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev"}/v1/maps/proxy/maps/api/js`
-      : "https://maps.googleapis.com/maps/api/js";
-    // استخدام v=quarterly لضمان الاستقرار وإضافة جميع المكتبات اللازمة
-    script.src = `${baseUrl}?key=${API_KEY}&v=quarterly&libraries=marker,places,geocoding,geometry,routes`;
+    script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
     script.async = true;
     script.crossOrigin = "anonymous";
     script.onload = () => {
-      if (window.google && window.google.maps) {
-        console.log("[Maps] Google Maps API loaded successfully");
-        resolve(null);
-      } else {
-        console.error("[Maps] Google object not found after script load");
-        resolve(null);
-      }
+      resolve(null);
+      script.remove(); // Clean up immediately
     };
     script.onerror = () => {
-      console.error("[Maps] Failed to load Google Maps script");
-      resolve(null);
+      console.error("Failed to load Google Maps script");
     };
     document.head.appendChild(script);
   });
@@ -129,63 +118,12 @@ interface MapViewProps {
 
 export function MapView({
   className,
-  initialCenter = { lat: 30.2241, lng: 31.4744 }, // Al-Obour, Egypt
+  initialCenter = { lat: 37.7749, lng: -122.4194 },
   initialZoom = 12,
   onMapReady,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
-
-  // إخفاء نافذة خطأ جوجل مابس المنبثقة برمجياً
-  useEffect(() => {
-    // إضافة CSS لإخفاء النوافذ المنبثقة
-    const style = document.createElement('style');
-    style.innerHTML = `
-      /* إخفاء نافذة الخطأ من جوجل */
-      [role="dialog"] {
-        display: none !important;
-      }
-      .gm-err-container {
-        display: none !important;
-      }
-    `;
-    document.head.appendChild(style);
-
-    // محاولة إغلاق أي نافذة منبثقة تظهر
-    const closeErrorDialog = () => {
-      // البحث عن أي نوافذ حوار (dialog) وإغلاقها
-      const dialogs = document.querySelectorAll('[role="dialog"]');
-      dialogs.forEach((dialog: any) => {
-        dialog.style.display = 'none';
-        dialog.style.visibility = 'hidden';
-      });
-
-      // البحث عن أزرار "حسناً" أو "OK" والضغط عليها تلقائياً
-      const buttons = document.querySelectorAll('button');
-      buttons.forEach((btn: any) => {
-        if (btn.textContent?.includes('حسناً') || btn.textContent?.includes('OK')) {
-          try {
-            btn.click();
-          } catch (e) {}
-        }
-      });
-    };
-
-    // تشغيل الدالة عند ظهور أي عنصر جديد
-    const observer = new MutationObserver(closeErrorDialog);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-
-    // محاولة إغلاق أي نافذة موجودة بالفعل
-    closeErrorDialog();
-
-    return () => {
-      observer.disconnect();
-      document.head.removeChild(style);
-    };
-  }, []);
 
   const init = usePersistFn(async () => {
     await loadMapScript();
@@ -193,20 +131,17 @@ export function MapView({
       console.error("Map container not found");
       return;
     }
-    
-    if (!map.current && window.google && window.google.maps) {
-      map.current = new window.google.maps.Map(mapContainer.current, {
-        zoom: initialZoom,
-        center: initialCenter,
-        mapTypeControl: true,
-        fullscreenControl: true,
-        zoomControl: true,
-        streetViewControl: true,
-        mapId: "DEMO_MAP_ID",
-      });
-      if (onMapReady) {
-        onMapReady(map.current);
-      }
+    map.current = new window.google.maps.Map(mapContainer.current, {
+      zoom: initialZoom,
+      center: initialCenter,
+      mapTypeControl: true,
+      fullscreenControl: true,
+      zoomControl: true,
+      streetViewControl: true,
+      mapId: "DEMO_MAP_ID",
+    });
+    if (onMapReady) {
+      onMapReady(map.current);
     }
   });
 
@@ -215,6 +150,6 @@ export function MapView({
   }, [init]);
 
   return (
-    <div ref={mapContainer} className={cn("w-full h-[500px] rounded-lg overflow-hidden border border-border", className)} />
+    <div ref={mapContainer} className={cn("w-full h-[500px]", className)} />
   );
 }
