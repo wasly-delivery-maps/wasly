@@ -36,53 +36,45 @@ export default function MapPicker({
       return;
     }
 
-    if (!geocoderRef.current) {
-      geocoderRef.current = new google.maps.Geocoder();
-    }
-
     try {
-      // محاولة البحث مع قيود جغرافية لمصر ولكن بدون قيود صارمة على العناوين الطويلة أو الأكواد
-      const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-        const request: google.maps.GeocoderRequest = { 
-          address: searchValue,
-        };
-        
-        // إذا كان العنوان يبدو محلياً (لا يحتوي على "Egypt" أو "مصر")، نضيف قيد الدولة
-        if (!searchValue.toLowerCase().includes("egypt") && !searchValue.includes("مصر")) {
-          request.componentRestrictions = { country: "EG" };
-        }
-
-        geocoderRef.current?.geocode(request, (results, status) => {
-          if (status === google.maps.GeocoderStatus.OK && results) {
-            resolve(results);
-          } else {
-            reject(new Error(`Geocoding failed: ${status}`));
+      // استخدام Nominatim API (OpenStreetMap) للبحث المجاني عن العناوين
+      // يدعم البحث بالأسماء، العناوين، وأكواد Plus Codes
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          searchValue
+        )}&countrycodes=eg&addressdetails=1&limit=1`,
+        {
+          headers: {
+            'Accept-Language': 'ar,en',
+            'User-Agent': 'WaslyDeliveryApp/1.0'
           }
-        });
-      });
+        }
+      );
 
-      if (results.length === 0) {
-        toast.error("لم يتم العثور على الموقع");
+      const results = await response.json();
+
+      if (!results || results.length === 0) {
+        toast.error("لم يتم العثور على الموقع. حاول كتابة اسم المكان بدقة.");
         return;
       }
 
       const location = results[0];
-      const lat = location.geometry.location.lat();
-      const lng = location.geometry.location.lng();
-      const address = location.formatted_address;
+      const lat = parseFloat(location.lat);
+      const lng = parseFloat(location.lon);
+      const address = location.display_name;
 
-      // تحديث الخريطة
+      // تحديث خريطة جوجل بناءً على نتائج البحث المجانية
       if (mapRef.current) {
         mapRef.current.setCenter({ lat, lng });
         mapRef.current.setZoom(17);
       }
 
-      // إزالة marker القديم
+      // إزالة marker القديم من خريطة جوجل
       if (markerRef.current) {
         markerRef.current.map = null;
       }
 
-      // إضافة marker جديد
+      // إضافة marker جديد على خريطة جوجل
       try {
         if (mapRef.current && window.google && window.google.maps) {
           markerRef.current = new google.maps.marker.AdvancedMarkerElement({
@@ -92,20 +84,20 @@ export default function MapPicker({
           });
         }
       } catch (error) {
-        console.error("[Maps] Error adding marker:", error);
+        console.error("[Maps] Error adding marker to Google Map:", error);
       }
 
-      // استدعاء callback
+      // استدعاء callback لتحديث بيانات الطلب
       const locationData: LocationData = {
         address,
         latitude: lat,
         longitude: lng,
       };
       onLocationSelect(locationData);
-      toast.success("تم العثور على الموقع");
+      toast.success("تم العثور على الموقع بنجاح");
     } catch (error) {
-      console.error("Search error:", error);
-      toast.error("فشل البحث عن الموقع. جرب كتابة اسم المكان بوضوح.");
+      console.error("Search error (Nominatim):", error);
+      toast.error("فشل البحث عن الموقع. يرجى المحاولة مرة أخرى.");
     }
   }, [searchValue, onLocationSelect, mapRef]);
 
