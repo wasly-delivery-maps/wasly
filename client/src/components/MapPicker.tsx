@@ -17,6 +17,18 @@ interface MapPickerProps {
   title?: string;
 }
 
+interface PhotonResult {
+  properties: {
+    name: string;
+    address?: string;
+    city?: string;
+    country?: string;
+  };
+  geometry: {
+    coordinates: [number, number];
+  };
+}
+
 export default function MapPicker({
   onLocationSelect,
   title = "اضغط على الخريطة لاختيار الموقع",
@@ -24,84 +36,56 @@ export default function MapPicker({
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const listenerRef = useRef<google.maps.MapsEventListener | null>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<PhotonResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
-  // تهيئة Geocoder عند تحميل الخريطة
-  const initializeGeocoder = useCallback(() => {
-    if (!geocoderRef.current && window.google && window.google.maps) {
-      try {
-        geocoderRef.current = new window.google.maps.Geocoder();
-        console.log("[Geocoder] تم تهيئة Geocoder بنجاح");
-      } catch (error) {
-        console.error("[Geocoder] خطأ في تهيئة Geocoder:", error);
-      }
+  // البحث عبر Photon API (Maps.me)
+  const searchPhoton = useCallback(async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    try {
+      // البحث المركز على مصر (الإحداثيات: 26.8206° N, 30.8025° E)
+      const response = await fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lon=31.3&lat=30.1&limit=5&lang=ar`
+      );
+
+      if (!response.ok) throw new Error("فشل البحث");
+
+      const data = await response.json();
+      setSuggestions(data.features || []);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error("[Photon] خطأ في البحث:", error);
+      setSuggestions([]);
     }
   }, []);
 
-  const handleSearch = useCallback(async () => {
-    if (!searchValue.trim()) {
-      toast.error("يرجى كتابة عنوان للبحث");
-      return;
-    }
+  // معالجة تغيير النص في خانة البحث
+  const handleSearchInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchValue(value);
+      searchPhoton(value);
+    },
+    [searchPhoton]
+  );
 
-    if (!mapRef.current) {
-      toast.error("الخريطة لم تحمل بعد");
-      return;
-    }
+  // تحديث الخريطة والموقع
+  const updateMapLocation = useCallback(
+    (lat: number, lng: number, address: string) => {
+      if (!mapRef.current) return;
 
-    setIsSearching(true);
+      console.log("[Map] تحديث الموقع:", { lat, lng, address });
 
-    try {
-      // التأكد من تهيئة Geocoder
-      if (!geocoderRef.current) {
-        initializeGeocoder();
-      }
-
-      if (!geocoderRef.current) {
-        throw new Error("فشل في تهيئة خدمة البحث");
-      }
-
-      // البحث عن الموقع
-      const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-        geocoderRef.current?.geocode(
-          { 
-            address: searchValue, 
-            componentRestrictions: { country: "EG" } 
-          },
-          (results, status) => {
-            console.log("[Geocoder] حالة البحث:", status, "عدد النتائج:", results?.length);
-            
-            if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
-              resolve(results);
-            } else {
-              const errorMsg = status === google.maps.GeocoderStatus.ZERO_RESULTS 
-                ? "لم يتم العثور على الموقع" 
-                : `خطأ في البحث: ${status}`;
-              reject(new Error(errorMsg));
-            }
-          }
-        );
-      });
-
-      if (results.length === 0) {
-        toast.error("لم يتم العثور على الموقع");
-        setIsSearching(false);
-        return;
-      }
-
-      const location = results[0];
-      const lat = location.geometry.location.lat();
-      const lng = location.geometry.location.lng();
-      const address = location.formatted_address;
-
-      console.log("[Search] الموقع المختار:", { lat, lng, address });
-
-      // تحديث الخريطة
+      // تحديث مركز الخريطة
       mapRef.current.setCenter({ lat, lng });
       mapRef.current.setZoom(17);
 
@@ -117,10 +101,14 @@ export default function MapPicker({
           position: { lat, lng },
           title: address,
         });
-        console.log("[Marker] تم إضافة marker بنجاح");
       } catch (error) {
         console.error("[Marker] خطأ في إضافة marker:", error);
       }
+
+      // تحديث حالة البحث
+      setSearchValue(address);
+      setSuggestions([]);
+      setShowSuggestions(false);
 
       // استدعاء callback
       const locationData: LocationData = {
@@ -129,22 +117,53 @@ export default function MapPicker({
         longitude: lng,
       };
       onLocationSelect(locationData);
-      toast.success("تم البحث عن الموقع بنجاح: " + address);
+      toast.success("تم اختيار الموقع: " + address);
+    },
+    [onLocationSelect]
+  );
+
+  // البحث اليدوي
+  const handleSearch = useCallback(async () => {
+    if (!searchValue.trim() || !mapRef.current) {
+      toast.error("يرجى كتابة عنوان للبحث");
+      return;
+    }
+
+    setIsSearching(true);
+
+    try {
+      // البحث عبر Photon API
+      const response = await fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchValue)}&lon=31.3&lat=30.1&limit=1&lang=ar`
+      );
+
+      if (!response.ok) throw new Error("فشل البحث");
+
+      const data = await response.json();
+      const results = data.features || [];
+
+      if (results.length === 0) {
+        toast.error("لم يتم العثور على الموقع");
+        setIsSearching(false);
+        return;
+      }
+
+      const result = results[0];
+      const [lng, lat] = result.geometry.coordinates;
+      const address = result.properties.name || "موقع محدد";
+
+      updateMapLocation(lat, lng, address);
     } catch (error) {
       console.error("[Search] خطأ في البحث:", error);
-      const errorMessage = error instanceof Error ? error.message : "فشل البحث عن الموقع";
-      toast.error(errorMessage);
+      toast.error("فشل البحث عن الموقع");
     } finally {
       setIsSearching(false);
     }
-  }, [searchValue, onLocationSelect, initializeGeocoder]);
+  }, [searchValue, updateMapLocation]);
 
   const handleMapReady = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
     console.log("[Map] تم تحميل الخريطة بنجاح");
-
-    // تهيئة Geocoder
-    initializeGeocoder();
 
     // تحديث مركز الخريطة إلى الحي الأول بالعبور
     map.setCenter({ lat: 30.1136, lng: 31.3925 });
@@ -167,165 +186,102 @@ export default function MapPicker({
 
       console.log("[Map Click] تم الضغط على الخريطة:", { lat, lng });
 
-      // إزالة marker القديم
-      if (markerRef.current) {
-        markerRef.current.map = null;
+      // الحصول على العنوان من الإحداثيات (Reverse Geocoding)
+      if (!geocoderRef.current) {
+        geocoderRef.current = new google.maps.Geocoder();
       }
 
-      // إضافة marker جديد باستخدام AdvancedMarkerElement
-      try {
-        markerRef.current = new google.maps.marker.AdvancedMarkerElement({
-          map,
-          position: { lat, lng },
-          title: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        });
-        console.log("[Marker] تم إضافة marker بنجاح");
-      } catch (error) {
-        console.error("[Marker] خطأ في إضافة marker:", error);
-        toast.error("فشل في إضافة marker على الخريطة");
-        return;
-      }
+      geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+        const address =
+          status === google.maps.GeocoderStatus.OK && results && results[0]
+            ? results[0].formatted_address
+            : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-      // تحديث مركز الخريطة
-      map.setCenter({ lat, lng });
-
-      // إنشء بيانات الموقع
-      const location: LocationData = {
-        address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        latitude: lat,
-        longitude: lng,
-      };
-
-      // استدعاء callback مع البيانات المحددة
-      onLocationSelect(location);
-      toast.success("تم اختيار الموقع بنجاح");
-    });
-  }, [onLocationSelect, initializeGeocoder]);
-
-  // إعداد Google Places Autocomplete
-  useEffect(() => {
-    if (!searchInputRef.current || !mapRef.current || !window.google) return;
-
-    try {
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(
-        searchInputRef.current,
-        {
-          componentRestrictions: { country: "eg" },
-          types: ["geocode", "establishment"],
-          fields: ["geometry", "formatted_address", "name"],
-        }
-      );
-
-      console.log("[Autocomplete] تم تهيئة Autocomplete بنجاح");
-
-      // عند اختيار مكان من الاقتراحات
-      autocompleteRef.current.addListener("place_changed", () => {
-        const place = autocompleteRef.current?.getPlace();
-        if (!place || !place.geometry || !place.geometry.location) {
-          console.warn("[Autocomplete] لم يتم الحصول على بيانات الموقع");
-          toast.error("لم يتم العثور على الموقع");
-          return;
-        }
-
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        const address = place.formatted_address || place.name || "موقع محدد";
-
-        console.log("[Autocomplete] تم اختيار موقع:", { lat, lng, address });
-
-        // تحديث الخريطة
-        mapRef.current?.setCenter({ lat, lng });
-        mapRef.current?.setZoom(17);
-
-        // إزالة marker القديم
-        if (markerRef.current) {
-          markerRef.current.map = null;
-        }
-
-        // إضافة marker جديد
-        try {
-          markerRef.current = new google.maps.marker.AdvancedMarkerElement({
-            map: mapRef.current,
-            position: { lat, lng },
-            title: address,
-          });
-        } catch (error) {
-          console.error("[Marker] خطأ في إضافة marker:", error);
-        }
-
-        // استدعاء callback
-        const location: LocationData = {
-          address,
-          latitude: lat,
-          longitude: lng,
-        };
-        onLocationSelect(location);
-        toast.success("تم اختيار الموقع بنجاح");
+        updateMapLocation(lat, lng, address);
       });
-    } catch (error) {
-      console.error("[Autocomplete] خطأ في إعداد Autocomplete:", error);
-    }
+    });
+  }, [updateMapLocation]);
 
-    return () => {
-      if (autocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
-    };
-  }, [onLocationSelect]);
+  // معالجة اختيار اقتراح
+  const handleSelectSuggestion = useCallback(
+    (result: PhotonResult) => {
+      const [lng, lat] = result.geometry.coordinates;
+      const address = result.properties.name || "موقع محدد";
 
-  // تنظيف عند فك المكون
-  useEffect(() => {
-    return () => {
-      if (listenerRef.current) {
-        google.maps.event.removeListener(listenerRef.current);
-      }
-      if (markerRef.current) {
-        markerRef.current.map = null;
-      }
-    };
-  }, []);
+      updateMapLocation(lat, lng, address);
+    },
+    [updateMapLocation]
+  );
 
   return (
     <div className="space-y-4">
       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-sm text-blue-900">{title}</p>
       </div>
-      
+
       <MapView
-        initialCenter={{ lat: 30.1145, lng: 31.3850 }} // Al-Obour First District (الحي الأول - العبور) coordinates
+        initialCenter={{ lat: 30.1145, lng: 31.3850 }}
         initialZoom={16}
         onMapReady={handleMapReady}
         className="h-[400px] rounded-lg border border-border"
       />
-      
+
       <div className="space-y-3">
-        <div className="flex gap-2">
-          <Input
-            ref={searchInputRef}
-            type="text"
-            placeholder="ابحث عن عنوان أو مكان..."
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') {
-                handleSearch();
-              }
-            }}
-            className="w-full text-right"
-            dir="rtl"
-            disabled={isSearching}
-          />
-          {searchValue.trim() && (
-            <Button
-              onClick={handleSearch}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4"
-              size="sm"
+        <div className="relative">
+          <div className="flex gap-2">
+            <Input
+              ref={searchInputRef}
+              type="text"
+              placeholder="ابحث عن عنوان أو مكان..."
+              value={searchValue}
+              onChange={handleSearchInputChange}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              className="w-full text-right"
+              dir="rtl"
               disabled={isSearching}
-            >
-              <Search className="w-4 h-4" />
-            </Button>
+            />
+            {searchValue.trim() && (
+              <Button
+                onClick={handleSearch}
+                className="bg-orange-500 hover:bg-orange-600 text-white px-4"
+                size="sm"
+                disabled={isSearching}
+              >
+                <Search className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+
+          {/* قائمة الاقتراحات */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+              {suggestions.map((result, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleSelectSuggestion(result)}
+                  className="w-full text-right px-4 py-3 hover:bg-orange-50 border-b last:border-b-0 transition-colors"
+                >
+                  <div className="font-semibold text-sm text-gray-900">
+                    {result.properties.name}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {result.properties.city && `${result.properties.city}, `}
+                    {result.properties.address}
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
         </div>
+
+        <p className="text-xs text-gray-500 text-right px-1">
+          🔍 البحث يعتمد على بيانات Maps.me (مجاني وموثوق)
+        </p>
       </div>
     </div>
   );
