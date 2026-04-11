@@ -1,5 +1,77 @@
 /**
- * GOOGLE MAPS FRONTEND INTEGRATION
+ * GOOGLE MAPS FRONTEND INTEGRATION - ESSENTIAL GUIDE
+ *
+ * USAGE FROM PARENT COMPONENT:
+ * ======
+ *
+ * const mapRef = useRef<google.maps.Map | null>(null);
+ *
+ * <MapView
+ *   initialCenter={{ lat: 40.7128, lng: -74.0060 }}
+ *   initialZoom={15}
+ *   onMapReady={(map) => {
+ *     mapRef.current = map; // Store to control map from parent anytime, google map itself is in charge of the re-rendering, not react state.
+ * </MapView>
+ *
+ * ======
+ * Available Libraries and Core Features:
+ * -------------------------------
+ * 📍 MARKER (from `marker` library)
+ * - Attaches to map using { map, position }
+ * new google.maps.marker.AdvancedMarkerElement({
+ *   map,
+ *   position: { lat: 37.7749, lng: -122.4194 },
+ *   title: "San Francisco",
+ * });
+ *
+ * -------------------------------
+ * 🏢 PLACES (from `places` library)
+ * - Does not attach directly to map; use data with your map manually.
+ * const place = new google.maps.places.Place({ id: PLACE_ID });
+ * await place.fetchFields({ fields: ["displayName", "location"] });
+ * map.setCenter(place.location);
+ * new google.maps.marker.AdvancedMarkerElement({ map, position: place.location });
+ *
+ * -------------------------------
+ * 🧭 GEOCODER (from `geocoding` library)
+ * - Standalone service; manually apply results to map.
+ * const geocoder = new google.maps.Geocoder();
+ * geocoder.geocode({ address: "New York" }, (results, status) => {
+ *   if (status === "OK" && results[0]) {
+ *     map.setCenter(results[0].geometry.location);
+ *     new google.maps.marker.AdvancedMarkerElement({
+ *       map,
+ *       position: results[0].geometry.location,
+ *     });
+ *   }
+ * });
+ *
+ * -------------------------------
+ * 📐 GEOMETRY (from `geometry` library)
+ * - Pure utility functions; not attached to map.
+ * const dist = google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
+ *
+ * -------------------------------
+ * 🛣️ ROUTES (from `routes` library)
+ * - Combines DirectionsService (standalone) + DirectionsRenderer (map-attached)
+ * const directionsService = new google.maps.DirectionsService();
+ * const directionsRenderer = new google.maps.DirectionsRenderer({ map });
+ * directionsService.route(
+ *   { origin, destination, travelMode: "DRIVING" },
+ *   (res, status) => status === "OK" && directionsRenderer.setDirections(res)
+ * );
+ *
+ * -------------------------------
+ * 🌦️ MAP LAYERS (attach directly to map)
+ * - new google.maps.TrafficLayer().setMap(map);
+ * - new google.maps.TransitLayer().setMap(map);
+ * - new google.maps.BicyclingLayer().setMap(map);
+ *
+ * -------------------------------
+ * ✅ SUMMARY
+ * - "map-attached" → AdvancedMarkerElement, DirectionsRenderer, Layers.
+ * - "standalone" → Geocoder, DirectionsService, DistanceMatrixService, ElevationService.
+ * - "data-only" → Place, Geometry utilities.
  */
 
 /// <reference types="@types/google.maps" />
@@ -27,7 +99,7 @@ function loadMapScript() {
     const baseUrl = isProxy 
       ? `${import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev"}/v1/maps/proxy/maps/api/js`
       : "https://maps.googleapis.com/maps/api/js";
-    
+    // استخدام v=quarterly لضمان الاستقرار وإضافة جميع المكتبات اللازمة
     script.src = `${baseUrl}?key=${API_KEY}&v=quarterly&libraries=marker,places,geocoding,geometry,routes`;
     script.async = true;
     script.crossOrigin = "anonymous";
@@ -57,101 +129,28 @@ interface MapViewProps {
 
 export function MapView({
   className,
-  initialCenter = { lat: 30.2241, lng: 31.4744 },
+  initialCenter = { lat: 30.2241, lng: 31.4744 }, // Al-Obour, Egypt
   initialZoom = 12,
   onMapReady,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
 
-  // كود شامل لإخفاء رسائل خطأ جوجل مابس والعناصر المزعجة
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.innerHTML = `
-      /* إخفاء نافذة الخطأ الرئيسية */
-      .gm-err-container,
-      .gm-error-message,
-      .gm-error-overlay {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-      }
-
-      /* إخفاء أي نوافذ منبثقة من جوجل */
-      .gm-style > div:first-child > div:nth-child(2),
-      .gm-style > div:first-child > div:nth-child(3) {
-        display: none !important;
-      }
-
-      /* إخفاء رسالة "For development purposes only" */
-      .gm-style-cc {
-        display: none !important;
-      }
-
-      /* إخفاء أزرار الإغلاق والتأكيد */
-      .dismissButton,
-      .gm-ui-hover-effect,
-      [aria-label="Close"] {
-        display: none !important;
-      }
-
-      /* إخفاء أي عناصر تحتوي على كلمة "error" أو "Error" */
-      [class*="error"],
-      [class*="Error"] {
-        display: none !important;
-      }
-
-      /* ضمان عدم ظهور أي نصوص خطأ */
-      .gm-style > div > div {
-        filter: opacity(0) !important;
-      }
-    `;
-    document.head.appendChild(style);
-
-    // محاولة إغلاق أي نافذة منبثقة تظهر
-    const observer = new MutationObserver(() => {
-      // البحث عن أي عناصر تحتوي على رسائل خطأ وإخفاؤها
-      const errorElements = document.querySelectorAll('[role="dialog"], .gm-err-container, .gm-error-message');
-      errorElements.forEach((el: any) => {
-        el.style.display = 'none';
-        el.style.visibility = 'hidden';
-      });
-
-      // محاولة النقر على أي أزرار إغلاق موجودة
-      const closeButtons = document.querySelectorAll('[aria-label="Close"], .dismissButton');
-      closeButtons.forEach((btn: any) => {
-        try {
-          btn.click();
-        } catch (e) {}
-      });
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['style', 'class']
-    });
-
-    return () => {
-      document.head.removeChild(style);
-      observer.disconnect();
-    };
-  }, []);
-
   const init = usePersistFn(async () => {
     await loadMapScript();
-    if (!mapContainer.current) return;
+    if (!mapContainer.current) {
+      console.error("Map container not found");
+      return;
+    }
     
     if (!map.current && window.google && window.google.maps) {
       map.current = new window.google.maps.Map(mapContainer.current, {
         zoom: initialZoom,
         center: initialCenter,
-        mapTypeControl: false,
-        fullscreenControl: false,
+        mapTypeControl: true,
+        fullscreenControl: true,
         zoomControl: true,
-        streetViewControl: false,
+        streetViewControl: true,
         mapId: "DEMO_MAP_ID",
       });
       if (onMapReady) {
@@ -165,6 +164,6 @@ export function MapView({
   }, [init]);
 
   return (
-    <div ref={mapContainer} className={cn("w-full h-[500px] rounded-lg overflow-hidden border border-border relative", className)} />
+    <div ref={mapContainer} className={cn("w-full h-[500px] rounded-lg overflow-hidden border border-border", className)} />
   );
 }
