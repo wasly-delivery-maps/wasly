@@ -27,28 +27,62 @@ export default function MapPicker({
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [searchValue, setSearchValue] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
+  // تهيئة Geocoder عند تحميل الخريطة
+  const initializeGeocoder = useCallback(() => {
+    if (!geocoderRef.current && window.google && window.google.maps) {
+      try {
+        geocoderRef.current = new window.google.maps.Geocoder();
+        console.log("[Geocoder] تم تهيئة Geocoder بنجاح");
+      } catch (error) {
+        console.error("[Geocoder] خطأ في تهيئة Geocoder:", error);
+      }
+    }
+  }, []);
+
   const handleSearch = useCallback(async () => {
-    if (!searchValue.trim() || !mapRef.current) {
+    if (!searchValue.trim()) {
       toast.error("يرجى كتابة عنوان للبحث");
       return;
     }
 
-    if (!geocoderRef.current) {
-      geocoderRef.current = new google.maps.Geocoder();
+    if (!mapRef.current) {
+      toast.error("الخريطة لم تحمل بعد");
+      return;
     }
 
+    setIsSearching(true);
+
     try {
+      // التأكد من تهيئة Geocoder
+      if (!geocoderRef.current) {
+        initializeGeocoder();
+      }
+
+      if (!geocoderRef.current) {
+        throw new Error("فشل في تهيئة خدمة البحث");
+      }
+
+      // البحث عن الموقع
       const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
         geocoderRef.current?.geocode(
-          { address: searchValue, componentRestrictions: { country: "EG" } },
+          { 
+            address: searchValue, 
+            componentRestrictions: { country: "EG" } 
+          },
           (results, status) => {
-            if (status === google.maps.GeocoderStatus.OK && results) {
+            console.log("[Geocoder] حالة البحث:", status, "عدد النتائج:", results?.length);
+            
+            if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
               resolve(results);
             } else {
-              reject(new Error("لم يتم العثور على الموقع"));
+              const errorMsg = status === google.maps.GeocoderStatus.ZERO_RESULTS 
+                ? "لم يتم العثور على الموقع" 
+                : `خطأ في البحث: ${status}`;
+              reject(new Error(errorMsg));
             }
           }
         );
@@ -56,6 +90,7 @@ export default function MapPicker({
 
       if (results.length === 0) {
         toast.error("لم يتم العثور على الموقع");
+        setIsSearching(false);
         return;
       }
 
@@ -63,6 +98,8 @@ export default function MapPicker({
       const lat = location.geometry.location.lat();
       const lng = location.geometry.location.lng();
       const address = location.formatted_address;
+
+      console.log("[Search] الموقع المختار:", { lat, lng, address });
 
       // تحديث الخريطة
       mapRef.current.setCenter({ lat, lng });
@@ -80,8 +117,9 @@ export default function MapPicker({
           position: { lat, lng },
           title: address,
         });
+        console.log("[Marker] تم إضافة marker بنجاح");
       } catch (error) {
-        console.error("خطأ في إضافة marker:", error);
+        console.error("[Marker] خطأ في إضافة marker:", error);
       }
 
       // استدعاء callback
@@ -93,20 +131,20 @@ export default function MapPicker({
       onLocationSelect(locationData);
       toast.success("تم البحث عن الموقع بنجاح: " + address);
     } catch (error) {
-      console.error("خطأ في البحث:", error);
-      toast.error("فشل البحث عن الموقع");
+      console.error("[Search] خطأ في البحث:", error);
+      const errorMessage = error instanceof Error ? error.message : "فشل البحث عن الموقع";
+      toast.error(errorMessage);
+    } finally {
+      setIsSearching(false);
     }
-  }, [searchValue, onLocationSelect, mapRef]);
-
-  // تهيئة Geocoder عند تحميل الخريطة
-  useEffect(() => {
-    if (mapRef.current && !geocoderRef.current) {
-      geocoderRef.current = new google.maps.Geocoder();
-    }
-  }, []);
+  }, [searchValue, onLocationSelect, initializeGeocoder]);
 
   const handleMapReady = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
+    console.log("[Map] تم تحميل الخريطة بنجاح");
+
+    // تهيئة Geocoder
+    initializeGeocoder();
 
     // تحديث مركز الخريطة إلى الحي الأول بالعبور
     map.setCenter({ lat: 30.1136, lng: 31.3925 });
@@ -120,14 +158,14 @@ export default function MapPicker({
     // إضافة listener جديد لحدث الضغط على الخريطة
     listenerRef.current = map.addListener("click", (event: google.maps.MapMouseEvent) => {
       if (!event.latLng) {
-        console.error("لم يتم الحصول على الإحداثيات");
+        console.error("[Map] لم يتم الحصول على الإحداثيات");
         return;
       }
 
       const lat = event.latLng.lat();
       const lng = event.latLng.lng();
 
-      console.log("تم الضغط على الخريطة:", { lat, lng });
+      console.log("[Map Click] تم الضغط على الخريطة:", { lat, lng });
 
       // إزالة marker القديم
       if (markerRef.current) {
@@ -141,9 +179,9 @@ export default function MapPicker({
           position: { lat, lng },
           title: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
         });
-        console.log("تم إضافة marker بنجاح");
+        console.log("[Marker] تم إضافة marker بنجاح");
       } catch (error) {
-        console.error("خطأ في إضافة marker:", error);
+        console.error("[Marker] خطأ في إضافة marker:", error);
         toast.error("فشل في إضافة marker على الخريطة");
         return;
       }
@@ -162,14 +200,14 @@ export default function MapPicker({
       onLocationSelect(location);
       toast.success("تم اختيار الموقع بنجاح");
     });
-  }, [onLocationSelect]);
+  }, [onLocationSelect, initializeGeocoder]);
 
   // إعداد Google Places Autocomplete
   useEffect(() => {
-    if (!searchInputRef.current || !mapRef.current) return;
+    if (!searchInputRef.current || !mapRef.current || !window.google) return;
 
     try {
-      autocompleteRef.current = new google.maps.places.Autocomplete(
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(
         searchInputRef.current,
         {
           componentRestrictions: { country: "eg" },
@@ -178,10 +216,13 @@ export default function MapPicker({
         }
       );
 
+      console.log("[Autocomplete] تم تهيئة Autocomplete بنجاح");
+
       // عند اختيار مكان من الاقتراحات
       autocompleteRef.current.addListener("place_changed", () => {
         const place = autocompleteRef.current?.getPlace();
         if (!place || !place.geometry || !place.geometry.location) {
+          console.warn("[Autocomplete] لم يتم الحصول على بيانات الموقع");
           toast.error("لم يتم العثور على الموقع");
           return;
         }
@@ -189,6 +230,8 @@ export default function MapPicker({
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
         const address = place.formatted_address || place.name || "موقع محدد";
+
+        console.log("[Autocomplete] تم اختيار موقع:", { lat, lng, address });
 
         // تحديث الخريطة
         mapRef.current?.setCenter({ lat, lng });
@@ -207,7 +250,7 @@ export default function MapPicker({
             title: address,
           });
         } catch (error) {
-          console.error("خطأ في إضافة marker:", error);
+          console.error("[Marker] خطأ في إضافة marker:", error);
         }
 
         // استدعاء callback
@@ -220,7 +263,7 @@ export default function MapPicker({
         toast.success("تم اختيار الموقع بنجاح");
       });
     } catch (error) {
-      console.error("خطأ في إعداد Autocomplete:", error);
+      console.error("[Autocomplete] خطأ في إعداد Autocomplete:", error);
     }
 
     return () => {
@@ -270,12 +313,14 @@ export default function MapPicker({
             }}
             className="w-full text-right"
             dir="rtl"
+            disabled={isSearching}
           />
           {searchValue.trim() && (
             <Button
               onClick={handleSearch}
               className="bg-orange-500 hover:bg-orange-600 text-white px-4"
               size="sm"
+              disabled={isSearching}
             >
               <Search className="w-4 h-4" />
             </Button>
