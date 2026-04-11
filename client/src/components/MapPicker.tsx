@@ -101,42 +101,43 @@ export default function MapPicker({
   // تحديث الخريطة والموقع
   const updateMapLocation = useCallback(
     (lat: number, lng: number, address: string) => {
-      if (!mapRef.current) return;
-
       console.log("[Map] تحديث الموقع:", { lat, lng, address });
 
-      // تحديث مركز الخريطة
-      mapRef.current.setCenter({ lat, lng });
-      mapRef.current.setZoom(17);
-
-      // إزالة marker القديم
-      if (markerRef.current) {
-        markerRef.current.map = null;
-      }
-
-      // إضافة marker جديد
-      try {
-        markerRef.current = new google.maps.marker.AdvancedMarkerElement({
-          map: mapRef.current,
-          position: { lat, lng },
-          title: address,
-        });
-      } catch (error) {
-        console.error("[Marker] خطأ في إضافة marker:", error);
-      }
-
-      // تحديث حالة البحث
+      // تحديث حالة البحث فوراً لضمان استجابة الواجهة
       setSearchValue(address);
       setSuggestions([]);
       setShowSuggestions(false);
 
-      // استدعاء callback
+      // استدعاء callback لتحديث الحالة في المكون الأب (CreateOrder)
       const locationData: LocationData = {
         address,
         latitude: lat,
         longitude: lng,
       };
       onLocationSelect(locationData);
+
+      if (mapRef.current) {
+        // تحديث مركز الخريطة
+        mapRef.current.setCenter({ lat, lng });
+        mapRef.current.setZoom(17);
+
+        // إزالة marker القديم
+        if (markerRef.current) {
+          markerRef.current.map = null;
+        }
+
+        // إضافة marker جديد
+        try {
+          markerRef.current = new google.maps.marker.AdvancedMarkerElement({
+            map: mapRef.current,
+            position: { lat, lng },
+            title: address,
+          });
+        } catch (error) {
+          console.error("[Marker] خطأ في إضافة marker:", error);
+        }
+      }
+      
       toast.success("تم اختيار الموقع: " + address);
     },
     [onLocationSelect]
